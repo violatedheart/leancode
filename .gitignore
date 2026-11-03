@@ -1,0 +1,9 @@
+.leancode/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+dist/
+build/
+*.egg-info/
+bench/.tmp/
