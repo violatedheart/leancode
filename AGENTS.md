@@ -7,3 +7,9 @@
 - Compress test results to failing names, assertions, and at most eight repository frames. Cap each tool result near 400 tokens. Stop as soon as tests pass or the budget is exhausted.
 - Run the unit suite after changes: `python -m pytest` (or `python -m unittest discover -s tests -v` when pytest is unavailable). Run and record the paired benchmark only when the local model server is available; never fabricate measured results.
 - Each completed milestone must have passing tests and a Git commit. Update `README.md`, `RESULTS.md`, and these rules when behavior changes.
+- Preserve the expert phase order: understand task criteria and repo notes; localize by BM25 plus callers/callees; reproduce only when baseline tests are green; hypothesize after an unsuccessful fast patch; verify locally; then review the patch before finishing.
+- Keep each phase prompt constrained and below 300 tokens for its fixed prefix/schema. Keep the prompt stateless, the input at 1500 tokens, the completion at 400 tokens, and the total run at six model calls and the configured task budget.
+- Reproduction tests are temporary, at most 30 lines, and must fail on an assertion before a source patch is attempted. Remove the test and newly created bytecode after the check.
+- Restrict edits to a selected symbol and 40 changed lines. Reject edits to existing tests, skip/xfail changes, unrelated paths, and duplicate patch hashes. Best-of-three candidates run only in scratch copies below `.leancode/`.
+- Optional expert features stay off by default until `leancode bench --sweep` shows a pass-rate or tokens-per-solved-task improvement. Record measured feature-ablation results; report unavailable endpoints as not run.
+- Export prompt/completion pairs only from passing runs to `.leancode/traces.jsonl`; do not include fine-tuning code or upload traces.

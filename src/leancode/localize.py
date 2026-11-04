@@ -36,6 +36,34 @@ def localize(index: SymbolIndex, task: str, failing_output: str = "", *, limit: 
     return [(symbols[key], score) for key, score in ranked[:limit]]
 
 
+def expand_symbol_graph(index: SymbolIndex, candidates: list[tuple[object, float]], *, limit: int = 8) -> list[tuple[object, float]]:
+    """Add likely direct callers and callees using the cached identifier map."""
+    if not candidates:
+        return []
+    by_name: dict[str, list[object]] = defaultdict(list)
+    for symbol in index.symbols:
+        by_name[symbol.name].append(symbol)
+    scores = {(s.path, s.name, s.start_line): [s, score] for s, score in candidates}
+    for target, score in candidates[:4]:
+        target_key = (target.path, target.name, target.start_line)
+        for other in index.symbols:
+            key = (other.path, other.name, other.start_line)
+            if key == target_key or target.name not in other.identifiers:
+                continue
+            row = scores.setdefault(key, [other, 0.0])
+            row[1] += score * 0.35
+        # Names referenced by the target's identifiers are possible callees.
+        for name, related in by_name.items():
+            if name == target.name or name not in target.identifiers:
+                continue
+            for other in related:
+                key = (other.path, other.name, other.start_line)
+                row = scores.setdefault(key, [other, 0.0])
+                row[1] += score * 0.25
+    ranked = sorted(scores.values(), key=lambda row: (-row[1], row[0].path, row[0].start_line))
+    return [(symbol, float(score)) for symbol, score in ranked[:limit]]
+
+
 def read_symbol(repo: Path, symbol) -> str:
     lines = (repo / symbol.path).read_text(encoding="utf-8", errors="replace").splitlines()
     return "\n".join(f"{n}: {lines[n-1]}" for n in range(symbol.start_line, min(symbol.end_line, len(lines)) + 1))

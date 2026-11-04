@@ -60,6 +60,8 @@ export LEANCODE_API_KEY=ollama
 
 ```bash
 leancode run --repo . --task "Fix the off-by-one bug in parse_rows" --test-cmd "python -m pytest -q" --budget 6000
+# Enable the staged expert workflow when a task needs reproduction and repair
+leancode run --repo . --task "..." --test-cmd "python -m pytest -q" --expert-workflow
 ```
 
 For JavaScript/TypeScript, configure the project test command, such as `node --test`. If `--test-cmd` is omitted, LeanCode will still propose and syntax-check a patch but will report it as unverified. Tests always run with the configured command; the model has no shell tool.
@@ -68,6 +70,7 @@ For JavaScript/TypeScript, configure the project test command, such as `node --t
 leancode doctor
 leancode run --repo . --task "..." [--test-cmd "..."] [--budget 6000] [--model local-coder]
 leancode bench
+leancode bench --sweep
 ```
 
 Every model request is stateless. The run log at `.leancode/runs/<run-id>.jsonl` records prompt, completion, cached-prefix and total tokens. Server usage counters are preferred; when absent, LeanCode tries a local tokenizer endpoint and then estimates at four characters per token. Cached tokens remain included in total prompt tokens.
@@ -80,12 +83,15 @@ Every model request is stateless. The run log at `.leancode/runs/<run-id>.jsonl`
 - Edits are unique search/replace blocks, whitespace-tolerant, syntax-checked with an already-cached Tree-sitter grammar, and retried once after a small indentation repair. Test output is reduced to failures, assertions, and at most eight repository stack frames; each tool result is capped at about 400 tokens.
 - Only the configured test command runs. The model cannot execute shell commands, access paths outside `--repo`, or use network tools. Run the agent on a working copy if you need a reversible patch review.
 - Pass rate and model behavior depend on the chosen local model. This project has not been calibrated with the target laptop’s GPU or local inference server in this workspace.
+- `--expert-workflow` enables deterministic understand/localize, targeted reproduction when the baseline is green, a short hypothesis call after a failed patch, up to three scratch candidates, the BM25 playbook, and `.leancode/notes.md`. Passing prompt/completion pairs are appended to `.leancode/traces.jsonl`.
+- The expert workflow's optional LLM features are off by default until the feature sweep demonstrates a pass-rate gain or fewer tokens per solved task. `leancode bench --sweep` compares an all-on lane against one-feature-at-a-time ablations, reporting pass rate, tokens per solved task, and time.
+- Repairs stay within one selected indexed symbol, reject edits to existing tests and skip/xfail directives, enforce a 40 changed-line ceiling, classify failures, and hash patches to prevent identical retries. Best-of-three candidates are applied only in temporary copies under `.leancode/` and the smallest passing diff is selected.
 
 ## Benchmark
 
-`leancode bench` compares LeanCode with a deliberately naive full-file/full-history rewrite baseline using the same model and token budget. It runs twelve isolated tasks in fresh temporary copies, including two multi-file tasks and six separate hidden-test sets, and writes `RESULTS.md`. The initial task suites fail before any patch. Results are marked “not run” when the configured endpoint is unavailable; no synthetic pass or token figures are substituted.
+`leancode bench` compares LeanCode with a deliberately naive full-file/full-history rewrite baseline using the same model and token budget. It runs eighteen isolated tasks in fresh temporary copies, including eight multi-file cases and six added harder cases with no visible failing tests. Twelve hidden-test sets are injected only during scoring. `leancode bench --sweep` ablates each optional expert feature and reports pass rate, tokens per solved task, and time.
 
-Current workspace status: the 12 visible benchmark suites were verified to fail before fixes. The paired model benchmark is **not run** because no local Ollama or llama.cpp endpoint is listening here. Start the server and rerun `leancode bench` to populate pass rates and measured token reduction.
+Current workspace status: the model benchmark is **not run** because no local OpenAI-compatible endpoint is available in this workspace. `RESULTS.md` records this honestly; no synthetic token or pass-rate figures are substituted. Start Ollama or llama.cpp and run both benchmark commands to collect paired and ablation measurements.
 
 ## Decisions
 
@@ -97,4 +103,6 @@ Current workspace status: the 12 visible benchmark suites were verified to fail 
 - **Token accounting:** count the complete serialized prompt plus schema without discounts for cache hits. Use server usage first, tokenizer endpoint second, chars/4 estimate last; display cached-prefix reuse separately.
 - **Benchmark baseline:** keep a deliberately wasteful agent that replays full history and full repository content, rewrites entire files, and uses the same local model and token budget. Hidden tests are injected only during scoring.
 - **Context and steps:** use the requested 4096 server context and 1500-token input cap; count the fast-path call in the six-step total to protect the 6000-token default budget.
-
+- **Expert feature gate:** keep reproduce, hypothesize, best-of-three, playbook, and notes off by default until `bench --sweep` shows a pass-rate or tokens-per-solved-task improvement. Users can enable them together with `--expert-workflow` while collecting measurements.
+- **Reproduction tests:** write one temporary test under the repo's test directory, run the configured test command, require an assertion failure, and remove both the test and any newly generated test bytecode before patching.
+- **Training traces:** only passing runs export their prompt/completion pairs as JSONL; no trainer or model download is included.

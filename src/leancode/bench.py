@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from .client import OpenAICompatibleClient
 from .meter import RunLedger
-from .runner import AgentRunner
+from .runner import AgentRunner, RunFeatures
 
 NAIVE_SYSTEM = "You are a coding agent. Read the complete repository and tests, then rewrite complete source files to solve the task. Return only JSON."
 NAIVE_SCHEMA = {
@@ -53,6 +53,17 @@ class Score:
     error: str = ""
 
 
+@dataclass
+class SweepScore:
+    feature: str
+    tasks: int
+    passed: int
+    tokens: int
+    solved_tokens: float | None
+    seconds: float
+    error: str = ""
+
+
 def load_tasks(project_root: Path) -> list[BenchTask]:
     manifest = project_root / "bench" / "manifest.json"
     rows = json.loads(manifest.read_text(encoding="utf-8"))
@@ -78,7 +89,8 @@ def _test(repo: Path, command: str, hidden: Path | None = None) -> tuple[bool, s
             destination.mkdir(exist_ok=True)
             sources = hidden.glob("test_*.py") if hidden.is_dir() else [hidden]
             for source in sources:
-                target = destination / source.name
+                target_name = "hidden.test.js" if source.suffix == ".js" and command.startswith("node --test") else source.name
+                target = destination / target_name
                 if target.exists():
                     raise ValueError(f"hidden test would overwrite {target}")
                 shutil.copy2(source, target)
@@ -261,3 +273,70 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
     output = project_root / "RESULTS.md"
     output.write_text(format_results(scores, chosen_model), encoding="utf-8")
     return scores, output
+
+
+def format_sweep(rows: list[SweepScore], model: str) -> str:
+    lines = [
+        "# LeanCode feature ablation sweep", "",
+        f"Model: `{model}`. Each lane runs the same tasks and budget; hidden tests are injected only after an agent run.", "",
+        "| Feature set | Pass rate | Total tokens | Tokens per solved task | Time (s) |", "|---|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        if row.error.startswith("not run:"):
+            lines.append(f"| {row.feature} | n/a | n/a | n/a | n/a |")
+            continue
+        rate = f"{row.passed}/{row.tasks} ({100 * row.passed / row.tasks:.1f}%)" if row.tasks else "n/a"
+        solved = f"{row.solved_tokens:.1f}" if row.solved_tokens is not None else "n/a"
+        lines.append(f"| {row.feature} | {rate} | {row.tokens} | {solved} | {row.seconds:.1f} |")
+    lines += ["", "Keep a feature enabled by default only when the all-on lane improves pass rate or tokens per solved task over the lane with that feature ablated."]
+    errors = [row for row in rows if row.error]
+    if errors:
+        lines += ["", "## Run status", ""] + [f"- {row.feature}: {row.error}" for row in errors]
+    return "\n".join(lines) + "\n"
+
+
+def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | None = None, budget: int = 6000) -> tuple[list[SweepScore], Path]:
+    """Run an all-on lane and one-feature-at-a-time ablations."""
+    from dataclasses import replace
+
+    project_root = project_root.resolve()
+    chosen_model = model or OpenAICompatibleClient(base_url=base_url).model
+    tasks = load_tasks(project_root)
+    output = project_root / "RESULTS.md"
+    base = RunFeatures(hypothesize=True, reproduce=True, best_of_three=True, playbook=True, notes=True)
+    variants = [("all-on", base)]
+    for feature in ("reproduce", "hypothesize", "best_of_three", "playbook", "notes"):
+        variants.append((f"without-{feature.replace('_', '-')}", replace(base, **{feature: False})))
+    if not _endpoint_available(base_url):
+        rows = [SweepScore(name, len(tasks), 0, 0, None, 0.0, "not run: local OpenAI-compatible endpoint unavailable") for name, _ in variants]
+        output.write_text(format_sweep(rows, chosen_model), encoding="utf-8")
+        return rows, output
+    rows: list[SweepScore] = []
+    temp_root = project_root / "bench" / ".sweep"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    for name, features in variants:
+        passed = token_total = 0
+        started = time.monotonic()
+        errors = []
+        for task in tasks:
+            run_dir = temp_root / f"{name}-{task.id}-{uuid.uuid4().hex[:5]}"
+            try:
+                _copy_task(task, run_dir)
+                result = AgentRunner(run_dir, task.task, test_cmd=task.test_cmd, budget=budget, model=chosen_model, base_url=base_url, features=features).run()
+                token_total += result.ledger.summary()["total_tokens"]
+                okay = result.status == "pass"
+                if task.hidden:
+                    hidden_pass, detail = _test(run_dir, task.test_cmd, task.hidden)
+                    okay = okay and hidden_pass
+                    if not hidden_pass:
+                        errors.append(f"{task.id}: hidden tests failed: {detail[:180]}")
+                passed += int(okay)
+            except Exception as exc:
+                errors.append(f"{task.id}: {type(exc).__name__}: {exc}")
+            finally:
+                shutil.rmtree(run_dir, ignore_errors=True)
+        solved_tokens = token_total / passed if passed else None
+        rows.append(SweepScore(name, len(tasks), passed, token_total, solved_tokens, time.monotonic() - started, "; ".join(errors[:4])))
+        print(f"{name}: pass={passed}/{len(tasks)} tokens={token_total} solved_tokens={solved_tokens}")
+    output.write_text(format_sweep(rows, chosen_model), encoding="utf-8")
+    return rows, output

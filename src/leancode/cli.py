@@ -9,8 +9,8 @@ from pathlib import Path
 from . import __version__
 from .client import OpenAICompatibleClient
 from .doctor import doctor_report
-from .runner import AgentRunner
-from .bench import run_benchmark
+from .runner import AgentRunner, RunFeatures
+from .bench import run_benchmark, run_sweep
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,10 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--budget", type=int, default=6000)
     run.add_argument("--model")
     run.add_argument("--base-url")
+    run.add_argument("--expert-workflow", action="store_true", help="enable hypothesis, reproduction, playbook, and repo notes")
     bench = sub.add_parser("bench", help="run the bundled benchmark")
     bench.add_argument("--budget", type=int, default=6000)
     bench.add_argument("--model")
     bench.add_argument("--base-url")
+    bench.add_argument("--sweep", action="store_true", help="ablate expert workflow features across all benchmark tasks")
     return parser
 
 
@@ -50,11 +52,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Repository does not exist: {repo}", file=sys.stderr)
             return 2
         try:
-            result = AgentRunner(repo, args.task, test_cmd=args.test_cmd, budget=args.budget, model=args.model, base_url=args.base_url).run()
+            features = RunFeatures(hypothesize=True, reproduce=True, best_of_three=True, playbook=True, notes=True) if args.expert_workflow else RunFeatures()
+            result = AgentRunner(repo, args.task, test_cmd=args.test_cmd, budget=args.budget, model=args.model, base_url=args.base_url, features=features).run()
             summary = result.ledger.summary()
             print(f"{result.status}: {result.summary} ({result.reason})")
             print(f"steps={result.steps} tokens={summary['total_tokens']} (prompt={summary['prompt_tokens']}, completion={summary['completion_tokens']}, cached-prefix={summary['cached_prefix_tokens']})")
             print(f"usage log: {result.ledger.path}")
+            if result.diff:
+                print("\nPatch diff:\n" + result.diff)
             return 0 if result.status == "pass" else 1
         except (RuntimeError, OSError, ValueError) as exc:
             print(f"leancode: {exc}", file=sys.stderr)
@@ -63,7 +68,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             cwd = Path.cwd().resolve()
             project_root = cwd if (cwd / "bench" / "manifest.json").is_file() else Path(__file__).resolve().parents[2]
-            scores, output = run_benchmark(project_root, model=args.model, base_url=args.base_url, budget=args.budget)
+            if args.sweep:
+                scores, output = run_sweep(project_root, model=args.model, base_url=args.base_url, budget=args.budget)
+            else:
+                scores, output = run_benchmark(project_root, model=args.model, base_url=args.base_url, budget=args.budget)
             print(f"\nWrote {output}")
             return 0 if scores and not any(score.error for score in scores) else 1
         except (RuntimeError, OSError, ValueError, json.JSONDecodeError) as exc:
