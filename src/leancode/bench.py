@@ -13,7 +13,12 @@ from urllib.request import Request, urlopen
 
 from .client import OpenAICompatibleClient
 from .meter import RunLedger
-from .runner import AgentRunner, RunFeatures
+from .runner import AgentRunner, RunFeatures, measured_default_features
+
+def _write_report(path: Path, content: str) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(content)
+
 
 NAIVE_SYSTEM = "You are a coding agent. Read the complete repository and tests, then rewrite complete source files to solve the task. Return only JSON."
 NAIVE_SCHEMA = {
@@ -238,7 +243,7 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
         error = "local OpenAI-compatible endpoint unavailable; start Ollama or llama-server and retry"
         scores = [Score(task.id, False, 0, False, 0, 0, 0.0, error) for task in tasks]
         output = project_root / "RESULTS.md"
-        output.write_text(format_results(scores, chosen_model), encoding="utf-8")
+        _write_report(output, format_results(scores, chosen_model))
         return scores, output
     for task in tasks:
         run_dir = temp_root / f"{task.id}-{uuid.uuid4().hex[:6]}"
@@ -257,7 +262,7 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
             _collect_run_logs(naive_copy, project_root, task.id)
 
             _copy_task(task, lean_copy)
-            result = AgentRunner(lean_copy, task.task, test_cmd=task.test_cmd, budget=budget, model=chosen_model, base_url=base_url).run()
+            result = AgentRunner(lean_copy, task.task, test_cmd=task.test_cmd, budget=budget, model=chosen_model, base_url=base_url, features=measured_default_features()).run()
             steps = result.steps
             lean_tokens = result.ledger.summary()["total_tokens"]
             lean_pass = result.status == "pass"
@@ -271,7 +276,7 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
         scores.append(Score(task.id, naive_pass, naive_tokens, lean_pass, lean_tokens, steps, time.monotonic() - start, error))
         print(f"{task.id}: naive={'pass' if naive_pass else 'fail'} ({naive_tokens}), leancode={'pass' if lean_pass else 'fail'} ({lean_tokens})")
     output = project_root / "RESULTS.md"
-    output.write_text(format_results(scores, chosen_model), encoding="utf-8")
+    _write_report(output, format_results(scores, chosen_model))
     return scores, output
 
 
@@ -302,17 +307,18 @@ def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | N
     project_root = project_root.resolve()
     chosen_model = model or OpenAICompatibleClient(base_url=base_url).model
     tasks = load_tasks(project_root)
-    output = project_root / "RESULTS.md"
+    output = project_root / "SWEEP_RESULTS.md"
     state_dir = project_root / ".leancode"
     state_dir.mkdir(parents=True, exist_ok=True)
     checkpoint = state_dir / "sweep-progress.json"
-    base = RunFeatures(hypothesize=True, reproduce=True, best_of_three=True, playbook=True, notes=True)
+    base = measured_default_features()
+    base.reproduce = True
     variants = [("all-on", base)]
     for feature in ("reproduce", "hypothesize", "best_of_three", "playbook", "notes"):
         variants.append((f"without-{feature.replace('_', '-')}", replace(base, **{feature: False})))
     if not _endpoint_available(base_url):
         rows = [SweepScore(name, len(tasks), 0, 0, None, 0.0, "not run: local OpenAI-compatible endpoint unavailable") for name, _ in variants]
-        output.write_text(format_sweep(rows, chosen_model), encoding="utf-8")
+        _write_report(output, format_sweep(rows, chosen_model))
         return rows, output
     rows: list[SweepScore] = []
     saved: dict[str, Any] = {}
@@ -352,7 +358,7 @@ def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | N
                     if not hidden_pass:
                         error = f"{task.id}: hidden tests failed: {detail[:180]}"
             except Exception as exc:
-                error = f"{task.id}: {type(exc).__name__}: {exc}"
+                error = f"run error: {task.id}: {type(exc).__name__}: {exc}"
             finally:
                 shutil.rmtree(run_dir, ignore_errors=True)
             elapsed = time.monotonic() - task_started
@@ -366,11 +372,11 @@ def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | N
             saved["lanes"][name] = {"tasks": completed, "seconds": seconds_total}
             checkpoint.write_text(json.dumps(saved, indent=2), encoding="utf-8")
             partial = [SweepScore(lane_name, len(tasks), sum(bool(v.get("passed")) for v in lane.get("tasks", {}).values()), sum(int(v.get("tokens", 0)) for v in lane.get("tasks", {}).values()), None, float(lane.get("seconds", 0.0)), "in progress" if len(lane.get("tasks", {})) < len(tasks) else "") for lane_name, lane in saved["lanes"].items()]
-            output.write_text(format_sweep(partial, chosen_model), encoding="utf-8")
+            _write_report(output, format_sweep(partial, chosen_model))
             print(f"{name}/{task.id}: pass={int(okay)} tokens={task_tokens}", flush=True)
         solved_tokens = token_total / passed if passed else None
         rows.append(SweepScore(name, len(tasks), passed, token_total, solved_tokens, seconds_total, "; ".join(errors[:4])))
         print(f"{name}: pass={passed}/{len(tasks)} tokens={token_total} solved_tokens={solved_tokens}")
-    output.write_text(format_sweep(rows, chosen_model), encoding="utf-8")
+    _write_report(output, format_sweep(rows, chosen_model))
     checkpoint.unlink(missing_ok=True)
     return rows, output

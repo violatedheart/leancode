@@ -54,6 +54,11 @@ class RunFeatures:
     notes: bool = False
 
 
+def measured_default_features() -> RunFeatures:
+    """Feature profile selected from the latest paired ablation sweep."""
+    return RunFeatures(hypothesize=True, best_of_three=True, playbook=True, notes=True)
+
+
 @dataclass
 class RunResult:
     status: str

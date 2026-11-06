@@ -6,11 +6,20 @@ from pathlib import Path
 from leancode.localize import expand_symbol_graph
 from leancode.index import Symbol, SymbolIndex
 from leancode.playbook import retrieve
+from leancode.runner import measured_default_features
 from leancode.tools import ProjectTools
 from leancode.workflow import acceptance_criteria, passing_trace, read_repo_notes, write_repo_notes
 
 
 class ExpertWorkflowTests(unittest.TestCase):
+    def test_measured_default_features_keep_reproduction_opt_in(self):
+        features = measured_default_features()
+        self.assertFalse(features.reproduce)
+        self.assertTrue(features.hypothesize)
+        self.assertTrue(features.best_of_three)
+        self.assertTrue(features.playbook)
+        self.assertTrue(features.notes)
+
     def test_understand_and_notes_are_bounded_and_cached(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             repo = Path(directory)

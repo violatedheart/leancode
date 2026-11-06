@@ -9,7 +9,7 @@ from pathlib import Path
 from . import __version__
 from .client import OpenAICompatibleClient
 from .doctor import doctor_report
-from .runner import AgentRunner, RunFeatures
+from .runner import AgentRunner, measured_default_features
 from .bench import run_benchmark, run_sweep
 
 
@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--budget", type=int, default=6000)
     run.add_argument("--model")
     run.add_argument("--base-url")
-    run.add_argument("--expert-workflow", action="store_true", help="enable hypothesis, reproduction, playbook, and repo notes")
+    run.add_argument("--expert-workflow", action="store_true", help="also reproduce a failing test before patching")
     bench = sub.add_parser("bench", help="run the bundled benchmark")
     bench.add_argument("--budget", type=int, default=6000)
     bench.add_argument("--model")
@@ -53,7 +53,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Repository does not exist: {repo}", file=sys.stderr)
             return 2
         try:
-            features = RunFeatures(hypothesize=True, reproduce=True, best_of_three=True, playbook=True, notes=True) if args.expert_workflow else RunFeatures()
+            features = measured_default_features()
+            features.reproduce = args.expert_workflow
             result = AgentRunner(repo, args.task, test_cmd=args.test_cmd, budget=args.budget, model=args.model, base_url=args.base_url, features=features).run()
             summary = result.ledger.summary()
             print(f"{result.status}: {result.summary} ({result.reason})")
@@ -74,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 scores, output = run_benchmark(project_root, model=args.model, base_url=args.base_url, budget=args.budget)
             print(f"\nWrote {output}")
+            if args.sweep:
+                failed_to_run = any(
+                    score.error.startswith(("not run:", "in progress")) or "run error:" in score.error
+                    for score in scores
+                )
+                return 0 if scores and not failed_to_run else 1
             return 0 if scores and not any(score.error for score in scores) else 1
         except (RuntimeError, OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"benchmark failed: {exc}", file=sys.stderr)
