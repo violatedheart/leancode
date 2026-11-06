@@ -55,6 +55,14 @@ def action(name, **values):
 
 
 class M2Tests(unittest.TestCase):
+    def test_localized_patch_candidates_exclude_tests_but_keep_production_symbol(self):
+        production = Symbol("src/palindrome.py", "is_palindrome", "function_definition", 1, 4, "def is_palindrome(text):", ["palindrome"])
+        test_function = Symbol("tests/test_solution.py", "test_plain", "function_definition", 5, 6, "def test_plain(self):", ["test_plain"])
+        js_test = Symbol("src/palindrome.test.ts", "isPalindrome", "function_declaration", 1, 4, "function isPalindrome():", ["palindrome"])
+        test_named = Symbol("src/checks.py", "test_helpers", "function_definition", 1, 2, "def test_helpers():", ["test_helpers"])
+        candidates = [(production, 2.0), (test_function, 1.5), (js_test, 1.25), (test_named, 1.0)]
+        self.assertEqual(AgentRunner._production_candidates(candidates), [(production, 2.0)])
+
     def test_edit_repairs_wrong_model_path_only_on_unique_localized_match(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             repo = Path(directory)
@@ -67,6 +75,18 @@ class M2Tests(unittest.TestCase):
             self.assertTrue(result.changed_path)
             self.assertEqual(result.changed_path, "sample.py")
             self.assertIn("return 1", (repo / "sample.py").read_text(encoding="utf-8"))
+
+    def test_edit_rejects_test_paths_before_localization(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            (repo / "tests").mkdir()
+            (repo / "tests" / "test_case.py").write_text("def check():\n    return True\n", encoding="utf-8")
+            tools = FakeTools(repo, [])
+            agent = AgentRunner(repo, "fix target", client=FakeClient([]), tools=tools)
+            result = agent._tool(action("edit", path="tests/test_case.py", search="return True", replace="return False"))
+            self.assertIn("edits to existing tests", result.text)
+            self.assertEqual(tools.edits, [])
+            self.assertIn("return True", (repo / "tests" / "test_case.py").read_text(encoding="utf-8"))
 
     def test_prefix_and_schema_fit_budget(self):
         self.assertLessEqual((len(SYSTEM_PROMPT) + 3) // 4 + SCHEMA_TOKENS_ESTIMATE, 300)

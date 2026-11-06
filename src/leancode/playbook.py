@@ -15,6 +15,7 @@ EXAMPLES = [
     ("stable unique order", "list(dict.fromkeys(values))", "deduplicate while preserving first-seen order"),
     ("empty average division", "return None if not values else sum(values) / len(values)", "handle empty input before dividing"),
     ("case insensitive trimmed boolean", "value.strip().lower()", "normalize surrounding whitespace and case before parsing"),
+    ("unicode accent insensitive palindrome normalization", "unicodedata.normalize('NFD', text.casefold())", "decompose accents, then keep only alphanumeric code points so combining marks do not break comparisons"),
     ("fibonacci zero base case", "if n == 0: return 0", "define both base cases before the iteration"),
     ("retry exponential backoff cap", "min(max_ms, base_ms * 2 ** attempt)", "use exponential growth and clamp the result to the cap"),
 ]

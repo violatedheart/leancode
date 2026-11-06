@@ -200,6 +200,23 @@ class AgentRunner:
             'Return action="edit" with path/search/replace or action="finish" with a concise summary.'
         )
 
+    @staticmethod
+    def _production_candidates(candidates: list[tuple[Any, float]]) -> list[tuple[Any, float]]:
+        """Keep tests useful as evidence, but never offer them as patch targets."""
+        result = []
+        for symbol, score in candidates:
+            path = symbol.path.replace("\\", "/").lower()
+            parts = path.split("/")
+            filename = parts[-1]
+            if any(part in {"test", "tests", "__tests__"} for part in parts):
+                continue
+            if filename.startswith("test_") or "_test." in filename or ".test." in filename or ".spec." in filename:
+                continue
+            if symbol.name.lower().startswith("test_"):
+                continue
+            result.append((symbol, score))
+        return result
+
     def _state_card(self, steps_left: int) -> str:
         task = " ".join(self.task.splitlines())[:800]
         last = " | ".join(self.last_result.splitlines())[:500]
@@ -218,6 +235,10 @@ class AgentRunner:
             if name == "edit":
                 if not action.get("path") or not action.get("search"):
                     return ToolResult("edit requires path and non-empty search")
+                raw_path = str(action["path"]).replace("\\", "/")
+                path_parts = [part.lower() for part in raw_path.split("/")]
+                if any(part in {"test", "tests", "__tests__"} for part in path_parts) or path_parts[-1].startswith("test_"):
+                    return ToolResult("Review rejected edits to existing tests.")
                 if action["path"] not in self.selected_symbols:
                     matches = []
                     search = action["search"]
@@ -412,7 +433,9 @@ class AgentRunner:
         self.phase = "UNDERSTAND"
         baseline = self.tools.test() if self.tools.test_cmd else ToolResult("No baseline test configured.")
         failure = baseline.text if not baseline.text.startswith("exit=0") and self.tools.test_cmd else ""
-        candidates = expand_symbol_graph(self.index, localize(self.index, self.task, failure, limit=3), limit=8)
+        candidates = self._production_candidates(
+            expand_symbol_graph(self.index, localize(self.index, self.task, failure, limit=6), limit=12)
+        )[:8]
         if self.features.notes:
             language = "javascript/typescript" if any(s.path.endswith((".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx")) for s, _ in candidates) else "python"
             self.repo_notes = write_repo_notes(self.repo, self.task, self.tools.test_cmd, language)
@@ -462,9 +485,13 @@ class AgentRunner:
             attempts += 1
             self.phase = "REPAIR"
             if attempts == 2:
-                candidates = expand_symbol_graph(self.index, candidates, limit=8)
+                candidates = self._production_candidates(expand_symbol_graph(self.index, candidates, limit=12))
             elif attempts >= 3:
-                candidates = expand_symbol_graph(self.index, localize(self.index, self.task, failure, limit=4), limit=10)
+                candidates = self._production_candidates(
+                    expand_symbol_graph(self.index, localize(self.index, self.task, failure, limit=8), limit=14)
+                )
+            for symbol, _score in candidates:
+                self.selected_symbols[symbol.path] = symbol
             rows = "\n".join(f"{s.path}:{s.start_line}-{s.end_line} {s.name}\n{read_symbol(self.repo, s)[:500]}" for s, _ in candidates[:2])
             prompt = (
                 f"{self._state_card(self.max_steps - self.steps)}\n"

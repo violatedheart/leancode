@@ -27,6 +27,11 @@ class ExpertWorkflowTests(unittest.TestCase):
         self.assertIn("off-by-one", result)
         self.assertLessEqual(len(result), 1000)
 
+    def test_playbook_retrieves_unicode_accent_normalization(self):
+        result = retrieve("case insensitive palindrome accented unicode letters", limit=1)
+        self.assertIn("unicodedata.normalize('NFD'", result)
+        self.assertIn("combining marks", result)
+
     def test_symbol_graph_adds_direct_caller_without_llm(self):
         index = SymbolIndex(Path.cwd())
         target = Symbol("a.py", "normalize", "function_definition", 1, 3, "def normalize():", ["normalize"])
