@@ -1,44 +1,105 @@
 # LeanCode
 
-LeanCode is a local-first CLI coding agent for small bug fixes and features. It tries one focused patch from a few relevant functions, tests it, and only enters a short repair loop if needed. The model sees selected source snippets and four constrained actions; it cannot browse files itself or run arbitrary commands.
+LeanCode is a local-first command-line coding agent for small bug fixes and features. Give it a repository and a task; it finds relevant code, proposes a focused patch, and runs your test command. Its goal is to solve tasks correctly while using fewer model tokens.
 
-## Install
+The default model endpoint is Ollama on your computer. LeanCode only sends the task and selected code to the configured endpoint. The model cannot run arbitrary shell commands or access files outside the target repository.
 
-Requires Python 3.11+, Ollama or `llama-server`, and a local coding model. Python dependencies are `httpx` and `tree-sitter-language-pack`; `pytest` is available in the development extra. If the tree-sitter pack is unavailable, Python symbol indexing and syntax checks fall back to the standard-library `ast` parser.
+## Requirements
+
+- Python 3.11 or newer
+- Git
+- Ollama installed and a coding model pulled, or an OpenAI-compatible server such as `llama-server`
+- A test runner appropriate for the repository you want LeanCode to edit
+
+Tree-sitter language packs provide symbol indexing and syntax checks for Python and JavaScript/TypeScript. If the pack is unavailable, LeanCode falls back to Python's standard-library `ast` parser for Python files. JavaScript/TypeScript edits need an available Tree-sitter grammar.
+
+## Install on Windows
+
+Open PowerShell and run:
+
+```powershell
+git clone https://github.com/violatedheart/leancode.git
+cd leancode
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+If PowerShell blocks virtual-environment activation, use the environment's Python directly instead:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m leancode.cli doctor
+```
+
+## Install on Linux or macOS
 
 ```bash
+git clone https://github.com/violatedheart/leancode.git
 cd leancode
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
-The language pack only uses parsers already present on disk during agent runs. To prepare Python and JavaScript/TypeScript grammars once during setup, run:
+## Set up a local model
 
-```bash
-python -c "from tree_sitter_language_pack import download; download(['python', 'javascript', 'typescript', 'tsx'])"
-```
+Start Ollama and pull a model that fits your machine. `leancode doctor` reports detected hardware and recommends a model size and context:
 
-LeanCode does not download grammars at runtime. Inference requests go only to `LEANCODE_BASE_URL` (localhost by default); all indexing, patching, syntax checks, and file operations are local. If a grammar is missing, indexing omits that language and edits in it are refused before tests run.
-
-## Local model setup
-
-Check available RAM and GPU, see the recommended model and copy its pull command:
-
-```bash
+```powershell
 leancode doctor
+ollama pull qwen2.5-coder:7b-instruct-q4_K_M
+ollama list
 ```
 
-For an 8 GB RAM laptop with little or no dedicated GPU, the recommendation is a 3B 4-bit coder with a 4096-token server context. The compact fallback is `qwen2.5-coder:1.5b-instruct-q4_0`:
+On Windows, Ollama normally runs in the background after opening the Ollama app. Confirm its local API responds before running LeanCode:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:11434/api/tags
+```
+
+On Linux or macOS, start Ollama if it is not already running:
 
 ```bash
-ollama pull qwen2.5-coder:1.5b-instruct-q4_0
-OLLAMA_CONTEXT_LENGTH=4096 ollama serve
+ollama serve
 ```
 
-The default model is selected from the detected hardware; override it with `LEANCODE_MODEL` or `--model`. The 1.5B Q4 model is listed in the [Ollama model library](https://ollama.com/library/qwen2.5-coder%3A1.5b-instruct-q4_0).
+In a second terminal, pull the model and confirm it is installed:
 
-For llama.cpp, download a compatible Q4 GGUF separately, then start its OpenAI-compatible server with context 4096:
+```bash
+ollama pull qwen2.5-coder:7b-instruct-q4_K_M
+ollama list
+```
+
+For a smaller-memory machine, use a smaller Q4 model, such as `qwen2.5-coder:1.5b-instruct-q4_0`. The quality and pass rate depend on the model. LeanCode sends Ollama a 4096-token context setting.
+
+## Configure the model endpoint
+
+Defaults for Ollama are:
+
+- Base URL: `http://127.0.0.1:11434/v1`
+- Model: selected by `leancode doctor`, unless you pass `--model` or set `LEANCODE_MODEL`
+- API key: `ollama` (Ollama does not require a hosted API key)
+
+PowerShell:
+
+```powershell
+$env:LEANCODE_BASE_URL = "http://127.0.0.1:11434/v1"
+$env:LEANCODE_MODEL = "qwen2.5-coder:7b-instruct-q4_K_M"
+$env:LEANCODE_API_KEY = "ollama"
+```
+
+Linux/macOS:
+
+```bash
+export LEANCODE_BASE_URL=http://127.0.0.1:11434/v1
+export LEANCODE_MODEL=qwen2.5-coder:7b-instruct-q4_K_M
+export LEANCODE_API_KEY=ollama
+```
+
+For `llama-server`, start its OpenAI-compatible API and point LeanCode at it. The model alias must match `LEANCODE_MODEL`:
 
 ```bash
 llama-server -m ./models/qwen-coder-q4.gguf --alias local-coder --ctx-size 4096 --host 127.0.0.1 --port 8080
@@ -46,63 +107,73 @@ export LEANCODE_BASE_URL=http://127.0.0.1:8080/v1
 export LEANCODE_MODEL=local-coder
 ```
 
-`llama-server` exposes OpenAI-compatible chat completions and supports a configurable context size; see the [llama.cpp server guide](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md). A local Bifrost gateway can sit between LeanCode and either server by pointing `LEANCODE_BASE_URL` at that gateway and using the route’s model name. Keep that gateway local if project data must remain on the laptop.
+The endpoint is swappable for a compatible gateway. If you configure a remote hosted endpoint, your task and selected source snippets are sent to that provider and may incur charges. Keep API keys in environment variables; do not paste them into source files or commit them.
 
-LeanCode defaults to `http://127.0.0.1:11434/v1`. Optional environment variables:
+## Use LeanCode
 
-```bash
-export LEANCODE_BASE_URL=http://127.0.0.1:11434/v1
-export LEANCODE_MODEL=qwen2.5-coder:1.5b-instruct-q4_0
-export LEANCODE_API_KEY=ollama
-```
+First go to the repository you want to change, then provide the task and its test command:
 
-## Use
-
-```bash
+```powershell
+cd C:\path\to\your\project
 leancode run --repo . --task "Fix the off-by-one bug in parse_rows" --test-cmd "python -m pytest -q" --budget 6000
-# Enable the staged expert workflow when a task needs reproduction and repair
-leancode run --repo . --task "..." --test-cmd "python -m pytest -q" --expert-workflow
 ```
 
-For JavaScript/TypeScript, configure the project test command, such as `node --test`. If `--test-cmd` is omitted, LeanCode will still propose and syntax-check a patch but will report it as unverified. Tests always run with the configured command; the model has no shell tool.
+For a unittest project:
 
-```bash
-leancode doctor
-leancode run --repo . --task "..." [--test-cmd "..."] [--budget 6000] [--model local-coder]
-leancode bench
-leancode bench --sweep
+```powershell
+leancode run --repo . --task "Handle an empty input in safe_average" --test-cmd "python -m unittest discover -s tests -q"
 ```
 
-Every model request is stateless. The run log at `.leancode/runs/<run-id>.jsonl` records prompt, completion, cached-prefix and total tokens. Server usage counters are preferred; when absent, LeanCode tries a local tokenizer endpoint and then estimates at four characters per token. Cached tokens remain included in total prompt tokens.
+For a JavaScript project:
 
-## Design and limits
+```powershell
+leancode run --repo . --task "Fix retryDelay for attempt zero" --test-cmd "node --test"
+```
 
-- Python first, JavaScript/TypeScript next; symbol indexing and BM25 localization are local and use no LLM tokens.
-- A single fast-path call sees at most three relevant function bodies. If tests fail, a stateless fallback runs up to six total model steps with `find`, `read`, `edit`, and `test` actions.
-- The system prompt plus action schema is under 300 estimated tokens; each request is capped at 1500 input tokens and 400 output tokens. The model server context is configured to 4096. Default task budget is 6000 total tokens.
-- Edits are unique search/replace blocks, whitespace-tolerant, syntax-checked with an already-cached Tree-sitter grammar, and retried once after a small indentation repair. Test output is reduced to failures, assertions, and at most eight repository stack frames; each tool result is capped at about 400 tokens.
-- Only the configured test command runs. The model cannot execute shell commands, access paths outside `--repo`, or use network tools. Run the agent on a working copy if you need a reversible patch review.
-- Pass rate and model behavior depend on the chosen local model. This project has not been calibrated with the target laptop’s GPU or local inference server in this workspace.
-- `--expert-workflow` enables deterministic understand/localize, targeted reproduction when the baseline is green, a short hypothesis call after a failed patch, up to three scratch candidates, the BM25 playbook, and `.leancode/notes.md`. Passing prompt/completion pairs are appended to `.leancode/traces.jsonl`.
-- The expert workflow's optional LLM features are off by default until the feature sweep demonstrates a pass-rate gain or fewer tokens per solved task. `leancode bench --sweep` compares an all-on lane against one-feature-at-a-time ablations, reporting pass rate, tokens per solved task, and time.
-- Repairs stay within one selected indexed symbol, reject edits to existing tests and skip/xfail directives, enforce a 40 changed-line ceiling, classify failures, and hash patches to prevent identical retries. Best-of-three candidates are applied only in temporary copies under `.leancode/` and the smallest passing diff is selected.
+Use `--model` to override the selected model. Use `--base-url` for a non-default compatible server, and `--budget` to change the total-token budget:
 
-## Benchmark
+```powershell
+leancode run --repo . --task "..." --test-cmd "python -m pytest -q" --model qwen2.5-coder:7b-instruct-q4_K_M --budget 6000
+```
 
-`leancode bench` compares LeanCode with a deliberately naive full-file/full-history rewrite baseline using the same model and token budget. It runs eighteen isolated tasks in fresh temporary copies, including eight multi-file cases and six added harder cases with no visible failing tests. Twelve hidden-test sets are injected only during scoring. `leancode bench --sweep` ablates each optional expert feature and reports pass rate, tokens per solved task, and time.
+`--test-cmd` is optional, but without it LeanCode cannot verify the patch and reports it as unverified. Only the configured test command runs; the model itself has no shell tool. Run LeanCode on a working copy if you want to preserve your original repository unchanged.
 
-Current workspace status: the model benchmark is **not run** because no local OpenAI-compatible endpoint is available in this workspace. `RESULTS.md` records this honestly; no synthetic token or pass-rate figures are substituted. Start Ollama or llama.cpp and run both benchmark commands to collect paired and ablation measurements.
+## Commands
+
+```text
+leancode doctor                 Detect hardware and recommend a model
+leancode run --repo . ...       Solve one coding task
+leancode bench                  Compare LeanCode with the naive baseline
+leancode bench --sweep          Compare workflow feature settings
+leancode bench --sweep --fresh  Ignore saved sweep progress and restart
+```
+
+The benchmark uses 18 isolated tasks. The sweep runs six feature settings over those tasks and can take a while. It checkpoints each completed task in `.leancode/sweep-progress.json`, updates `RESULTS.md` as it runs, and resumes by default when you run the same command again. Use `--fresh` to discard that progress.
+
+## Token use and logs
+
+LeanCode limits prompts and completions, indexes code locally, and sends only selected function snippets rather than the full repository. It stops when tests pass, the step limit is reached, or the token budget is exhausted.
+
+Per-call token usage is recorded under `.leancode/runs/`. Server usage fields are used when available; otherwise LeanCode estimates counts from text length. Full prompt tokens remain counted even when the server reports cached-prefix reuse. Passing prompt/completion pairs are exported to `.leancode/traces.jsonl` for possible future fine-tuning; no training code is included.
+
+## Current benchmark result
+
+Using `qwen2.5-coder:7b-instruct-q4_K_M`:
+
+- LeanCode: **7/18 passed (38.9%)**
+- Naive baseline: **0/18 passed**
+- LeanCode tokens: **29,833**
+- Naive baseline tokens: **75,364**
+- Token reduction: **60.4%**
+
+See [RESULTS.md](RESULTS.md) for the task-by-task table. These measurements are a baseline; the remaining failing tasks still need investigation and improvement.
 
 ## Decisions
 
-- **CLI and implementation:** Python 3.11+, `argparse`, and direct HTTP calls; no LangChain or agent framework.
-- **Default model:** choose from detected memory, preferring Qwen2.5-Coder Q4 tags already published by Ollama; use 1.5B when memory is very limited, 3B around an 8 GB laptop, and 7B only with more headroom. The exact `doctor` output is authoritative.
-- **Runtime locality:** the model endpoint defaults to localhost. Setup may install Python packages and prefetch grammars; run-time indexing, patching, syntax checks, and tests never fetch remote data. A Bifrost URL is supported for a local gateway.
-- **Constrained output:** one compact JSON Schema is reused for the fast and fallback calls, with temperature zero and no conversational history. `think=false` and `num_ctx=4096` are sent to Ollama; llama.cpp context is set at server launch.
-- **Edits and safety:** exact unique search/replace only; source writes stay below the target repo, and tests run only through the user-provided command. No free-form shell or network tools are exposed to the model.
-- **Token accounting:** count the complete serialized prompt plus schema without discounts for cache hits. Use server usage first, tokenizer endpoint second, chars/4 estimate last; display cached-prefix reuse separately.
-- **Benchmark baseline:** keep a deliberately wasteful agent that replays full history and full repository content, rewrites entire files, and uses the same local model and token budget. Hidden tests are injected only during scoring.
-- **Context and steps:** use the requested 4096 server context and 1500-token input cap; count the fast-path call in the six-step total to protect the 6000-token default budget.
-- **Expert feature gate:** keep reproduce, hypothesize, best-of-three, playbook, and notes off by default until `bench --sweep` shows a pass-rate or tokens-per-solved-task improvement. Users can enable them together with `--expert-workflow` while collecting measurements.
-- **Reproduction tests:** write one temporary test under the repo's test directory, run the configured test command, require an assertion failure, and remove both the test and any newly generated test bytecode before patching.
-- **Training traces:** only passing runs export their prompt/completion pairs as JSONL; no trainer or model download is included.
+- **Interface:** Python CLI with `argparse`; no agent framework.
+- **Model runtime:** Ollama locally by default, with an OpenAI-compatible base URL and model name for swapping servers.
+- **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser when the Tree-sitter pack is missing. JavaScript/TypeScript currently require Tree-sitter grammars.
+- **Task workflow:** localize code first, ask the model for a small search/replace edit, run tests, and use a bounded repair loop only when needed.
+- **Safety:** edits stay in the target repository and selected symbols; test execution uses only the user's configured command.
+- **Feature defaults:** optional reproduce, hypothesize, best-of-three, playbook, and notes features remain opt-in until a fresh feature sweep shows a pass-rate or tokens-per-solved-task improvement.
+
