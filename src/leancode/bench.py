@@ -295,14 +295,17 @@ def format_sweep(rows: list[SweepScore], model: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | None = None, budget: int = 6000) -> tuple[list[SweepScore], Path]:
-    """Run an all-on lane and one-feature-at-a-time ablations."""
+def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | None = None, budget: int = 6000, resume: bool = True) -> tuple[list[SweepScore], Path]:
+    """Run an all-on lane and one-feature-at-a-time ablations, checkpointing each completed task."""
     from dataclasses import replace
 
     project_root = project_root.resolve()
     chosen_model = model or OpenAICompatibleClient(base_url=base_url).model
     tasks = load_tasks(project_root)
     output = project_root / "RESULTS.md"
+    state_dir = project_root / ".leancode"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint = state_dir / "sweep-progress.json"
     base = RunFeatures(hypothesize=True, reproduce=True, best_of_three=True, playbook=True, notes=True)
     variants = [("all-on", base)]
     for feature in ("reproduce", "hypothesize", "best_of_three", "playbook", "notes"):
@@ -312,31 +315,62 @@ def run_sweep(project_root: Path, *, model: str | None = None, base_url: str | N
         output.write_text(format_sweep(rows, chosen_model), encoding="utf-8")
         return rows, output
     rows: list[SweepScore] = []
+    saved: dict[str, Any] = {}
+    if resume and checkpoint.exists():
+        try:
+            saved = json.loads(checkpoint.read_text(encoding="utf-8"))
+            if saved.get("model") != chosen_model or saved.get("budget") != budget or saved.get("task_ids") != [task.id for task in tasks]:
+                saved = {}
+        except (OSError, json.JSONDecodeError):
+            saved = {}
     temp_root = project_root / "bench" / ".sweep"
     temp_root.mkdir(parents=True, exist_ok=True)
     for name, features in variants:
-        passed = token_total = 0
+        prior = saved.get("lanes", {}).get(name, {})
+        completed = dict(prior.get("tasks", {}))
+        passed = sum(bool(item.get("passed")) for item in completed.values())
+        token_total = sum(int(item.get("tokens", 0)) for item in completed.values())
+        seconds_total = sum(float(item.get("seconds", 0.0)) for item in completed.values())
         started = time.monotonic()
-        errors = []
+        errors = [item["error"] for item in completed.values() if item.get("error")]
         for task in tasks:
+            if task.id in completed:
+                continue
             run_dir = temp_root / f"{name}-{task.id}-{uuid.uuid4().hex[:5]}"
+            task_started = time.monotonic()
+            task_tokens = 0
+            okay = False
+            error = ""
             try:
                 _copy_task(task, run_dir)
                 result = AgentRunner(run_dir, task.task, test_cmd=task.test_cmd, budget=budget, model=chosen_model, base_url=base_url, features=features).run()
-                token_total += result.ledger.summary()["total_tokens"]
+                task_tokens = result.ledger.summary()["total_tokens"]
                 okay = result.status == "pass"
                 if task.hidden:
                     hidden_pass, detail = _test(run_dir, task.test_cmd, task.hidden)
                     okay = okay and hidden_pass
                     if not hidden_pass:
-                        errors.append(f"{task.id}: hidden tests failed: {detail[:180]}")
-                passed += int(okay)
+                        error = f"{task.id}: hidden tests failed: {detail[:180]}"
             except Exception as exc:
-                errors.append(f"{task.id}: {type(exc).__name__}: {exc}")
+                error = f"{task.id}: {type(exc).__name__}: {exc}"
             finally:
                 shutil.rmtree(run_dir, ignore_errors=True)
+            elapsed = time.monotonic() - task_started
+            completed[task.id] = {"passed": okay, "tokens": task_tokens, "seconds": elapsed, "error": error}
+            passed += int(okay)
+            token_total += task_tokens
+            seconds_total += elapsed
+            if error:
+                errors.append(error)
+            saved = {"model": chosen_model, "budget": budget, "task_ids": [item.id for item in tasks], "lanes": saved.get("lanes", {})}
+            saved["lanes"][name] = {"tasks": completed, "seconds": seconds_total}
+            checkpoint.write_text(json.dumps(saved, indent=2), encoding="utf-8")
+            partial = [SweepScore(lane_name, len(tasks), sum(bool(v.get("passed")) for v in lane.get("tasks", {}).values()), sum(int(v.get("tokens", 0)) for v in lane.get("tasks", {}).values()), None, float(lane.get("seconds", 0.0)), "in progress" if len(lane.get("tasks", {})) < len(tasks) else "") for lane_name, lane in saved["lanes"].items()]
+            output.write_text(format_sweep(partial, chosen_model), encoding="utf-8")
+            print(f"{name}/{task.id}: pass={int(okay)} tokens={task_tokens}", flush=True)
         solved_tokens = token_total / passed if passed else None
-        rows.append(SweepScore(name, len(tasks), passed, token_total, solved_tokens, time.monotonic() - started, "; ".join(errors[:4])))
+        rows.append(SweepScore(name, len(tasks), passed, token_total, solved_tokens, seconds_total, "; ".join(errors[:4])))
         print(f"{name}: pass={passed}/{len(tasks)} tokens={token_total} solved_tokens={solved_tokens}")
     output.write_text(format_sweep(rows, chosen_model), encoding="utf-8")
+    checkpoint.unlink(missing_ok=True)
     return rows, output

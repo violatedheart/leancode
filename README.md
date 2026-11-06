@@ -4,7 +4,7 @@ LeanCode is a local-first CLI coding agent for small bug fixes and features. It 
 
 ## Install
 
-Requires Python 3.11+, Ollama or `llama-server`, and a local coding model. Python dependencies are `httpx` and `tree-sitter-language-pack`; `pytest` is available in the development extra.
+Requires Python 3.11+, Ollama or `llama-server`, and a local coding model. Python dependencies are `httpx` and `tree-sitter-language-pack`; `pytest` is available in the development extra. If the tree-sitter pack is unavailable, Python symbol indexing and syntax checks fall back to the standard-library `ast` parser.
 
 ```bash
 cd leancode

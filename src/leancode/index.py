@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import ast
 import json
 import math
 import os
@@ -74,8 +75,10 @@ def parse_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
     try:
         parser = _offline_parser(language)
     except (ImportError, OSError, RuntimeError, ValueError):
-        return [], None
+        parser = None
     if parser is None:
+        if language == "python":
+            return _python_symbols(path, repo)
         return [], None
     source = path.read_bytes()
     try:
@@ -109,6 +112,26 @@ def parse_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
     return found, bool(getattr(root, "has_error", False)() if callable(getattr(root, "has_error", None)) else getattr(root, "has_error", False))
 
 
+def _python_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool]:
+    """Use Python's built-in AST when the optional tree-sitter pack is absent."""
+    source = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        module = ast.parse(source)
+    except SyntaxError:
+        return [], True
+    found: list[Symbol] = []
+    for node in ast.walk(module):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        start = min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)])
+        end = getattr(node, "end_lineno", node.lineno)
+        segment = ast.get_source_segment(source, node) or ""
+        signature = next((line.strip() for line in segment.splitlines() if line.strip()), "")[:240]
+        identifiers = list(dict.fromkeys([child.id.lower() for child in ast.walk(node) if isinstance(child, ast.Name)] + [node.name.lower()]))
+        found.append(Symbol(path.relative_to(repo).as_posix(), node.name, "class_definition" if isinstance(node, ast.ClassDef) else "function_definition", start, end, signature, identifiers))
+    return found, False
+
+
 def _offline_parser(language: str):
     from tree_sitter_language_pack import get_parser, has_parser
 
@@ -139,6 +162,12 @@ def syntax_check(path: Path, source: str) -> bool | None:
             return None
         has_error = getattr(root, "has_error", False)
         return not (has_error() if callable(has_error) else has_error)
+    if language == "python":
+        try:
+            ast.parse(source)
+            return True
+        except SyntaxError:
+            return False
     return None
 
 

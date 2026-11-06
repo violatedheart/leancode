@@ -218,6 +218,26 @@ class AgentRunner:
             if name == "edit":
                 if not action.get("path") or not action.get("search"):
                     return ToolResult("edit requires path and non-empty search")
+                if action["path"] not in self.selected_symbols:
+                    matches = []
+                    search = action["search"]
+                    if isinstance(search, str) and len(search.strip()) >= 8:
+                        for candidate_path, candidate in self.selected_symbols.items():
+                            target = (self.repo / candidate_path).resolve()
+                            if self.repo not in target.parents or not target.is_file():
+                                continue
+                            source = target.read_text(encoding="utf-8")
+                            body = "\n".join(source.splitlines()[candidate.start_line - 1:candidate.end_line])
+                            exact = list(re.finditer(re.escape(search), body))
+                            found = exact if exact else list(re.finditer(self.tools._flex_pattern(search), body))
+                            if len(found) == 1:
+                                matches.append(candidate_path)
+                    if len(matches) == 1:
+                        # Repair only the model's path typo; the patch remains
+                        # constrained to one already-localized symbol.
+                        action["path"] = matches[0]
+                    else:
+                        return ToolResult("Review rejected edit outside localized symbols; search did not uniquely identify a selected symbol.")
                 patch_hash = hashlib.sha256((action["path"] + "\0" + action["search"] + "\0" + (action.get("replace") or "")).encode()).hexdigest()
                 if patch_hash in self.used_patch_hashes:
                     return ToolResult("Review rejected an identical patch retry.")

@@ -7,7 +7,7 @@ from leancode.client import LLMResult
 from leancode.index import Symbol, SymbolIndex
 from leancode.meter import TokenUsage
 from leancode.runner import ACTION_SCHEMA, SCHEMA_TOKENS_ESTIMATE, SYSTEM_PROMPT, AgentRunner
-from leancode.tools import ToolResult
+from leancode.tools import ProjectTools, ToolResult
 
 
 class FakeClient:
@@ -55,6 +55,19 @@ def action(name, **values):
 
 
 class M2Tests(unittest.TestCase):
+    def test_edit_repairs_wrong_model_path_only_on_unique_localized_match(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            (repo / "sample.py").write_text("def target():\n    return 0\n", encoding="utf-8")
+            tools = ProjectTools(repo, "python -c pass")
+            symbol = Symbol("sample.py", "target", "function_definition", 1, 2, "def target():", ["target"])
+            agent = AgentRunner(repo, "fix target", client=FakeClient([]), tools=tools)
+            agent.selected_symbols = {symbol.path: symbol}
+            result = agent._tool(action("edit", path="src/main.py", search="def target():\n    return 0", replace="def target():\n    return 1"))
+            self.assertTrue(result.changed_path)
+            self.assertEqual(result.changed_path, "sample.py")
+            self.assertIn("return 1", (repo / "sample.py").read_text(encoding="utf-8"))
+
     def test_prefix_and_schema_fit_budget(self):
         self.assertLessEqual((len(SYSTEM_PROMPT) + 3) // 4 + SCHEMA_TOKENS_ESTIMATE, 300)
         self.assertEqual(ACTION_SCHEMA["strict"], True)
