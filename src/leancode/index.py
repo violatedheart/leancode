@@ -17,6 +17,7 @@ from typing import Any
 EXTENSIONS = {".py": "python", ".pyi": "python", ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".ts": "typescript", ".tsx": "tsx"}
 SKIP_DIRS = {".git", ".leancode", ".venv", "venv", "node_modules", "dist", "build", "__pycache__", ".next"}
 SYMBOL_KINDS = {"function_definition", "class_definition", "function_declaration", "class_declaration", "method_definition", "method_declaration", "interface_declaration", "type_alias_declaration", "enum_declaration"}
+INDEX_VERSION = 2
 WORD = re.compile(r"[A-Za-z_$][\w$]*|\d+")
 
 
@@ -284,7 +285,8 @@ class SymbolIndex:
         old: dict[str, dict[str, Any]] = {}
         try:
             data = json.loads(self.cache_path.read_text(encoding="utf-8"))
-            old = data.get("files", {})
+            if data.get("version") == INDEX_VERSION:
+                old = data.get("files", {})
         except (OSError, ValueError, AttributeError):
             pass
         current: set[str] = set()
@@ -305,7 +307,7 @@ class SymbolIndex:
             self.symbols.extend(Symbol(**item) for item in self.files[rel].get("symbols", []))
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.cache_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"version": 1, "files": self.files}, separators=(",", ":")), encoding="utf-8")
+        tmp.write_text(json.dumps({"version": INDEX_VERSION, "files": self.files}, separators=(",", ":")), encoding="utf-8")
         tmp.replace(self.cache_path)
         return self
 

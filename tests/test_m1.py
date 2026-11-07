@@ -17,6 +17,19 @@ class M1Tests(unittest.TestCase):
             self.assertEqual([symbol.name for symbol in symbols], ["format_duration"])
             self.assertTrue(syntax_check(source, source.read_text(encoding="utf-8")))
 
+    def test_old_index_cache_is_rebuilt_after_index_format_update(self):
+        import json
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            source = repo / "sample.py"
+            source.write_text("\ufeffdef format_duration(seconds):\n    return seconds\n", encoding="utf-8")
+            cache = repo / ".leancode" / "index.json"
+            cache.parent.mkdir()
+            cache.write_text(json.dumps({"version": 1, "files": {}}), encoding="utf-8")
+            index = SymbolIndex(repo).build()
+            self.assertIn("format_duration", [symbol.name for symbol in index.symbols])
+            self.assertEqual(json.loads(cache.read_text(encoding="utf-8"))["version"], 2)
+
     def test_javascript_syntax_uses_node_when_tree_sitter_is_unavailable(self):
         import shutil
         if not shutil.which("node"):
