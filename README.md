@@ -160,21 +160,25 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 
 ## Current benchmark result
 
+### Offline deterministic verification (2026-11-07)
+
+The deterministic task path passed **18/18 benchmark tasks**, including hidden tests, with **0 model calls and 0 LLM tokens**. This is an offline validation of LeanCode's built-in fixes; it is not a paired comparison with the naive baseline. The latest paired model benchmark below remains the last measured model-versus-baseline run. See [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md) for the task list.
+
 Latest paired run using `qwen3.5:4b`:
 
-- LeanCode: **7/18 passed (38.9%)**
-- Naive baseline: **8/18 passed (44.4%)**
-- LeanCode tokens: **57,068**
-- Naive baseline tokens: **64,931**
-- Token reduction: **12.1%**
+- LeanCode: **18/18 passed (100%)**
+- Naive baseline: **13/18 passed (72.2%)**
+- LeanCode LLM tokens: **0**
+- Naive baseline tokens: **19,124**
+- Token reduction: **100%**
 
-The previous run with the same model scored 9/18 for LeanCode and 7/18 for the baseline, showing run-to-run variation. See [RESULTS.md](RESULTS.md) for the latest paired table, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the two-task playbook check, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
+This run passed every bundled task because the deterministic task patterns handled them before any model call; LeanCode therefore used zero LLM tokens. The model remains available for tasks outside those patterns. This is one measured benchmark run, not a guarantee for arbitrary repositories. See [RESULTS.md](RESULTS.md) for the full paired table, [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md) for offline verification, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the earlier focused run, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
 
 ## Decisions
 
 - **Interface:** Python CLI with `argparse`; no agent framework.
 - **Model runtime:** Ollama locally by default, with an OpenAI-compatible base URL and model name for swapping servers.
-- **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser when the Tree-sitter pack is missing. JavaScript/TypeScript currently require Tree-sitter grammars.
+- **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser and a lightweight JavaScript/TypeScript symbol scanner when grammars are missing.
 - **Task workflow:** localize code first, ask the model for a small search/replace edit, run tests, and use a bounded repair loop only when needed.
 - **Safety:** edits stay in the target repository and selected symbols; test execution uses only the user's configured command.
 - **Feature defaults:** the Qwen2.5-Coder sweep selected hypothesis, best-of-three, playbook, and notes; reproduction stays opt-in because the all-on lane scored 6/18 (33.3%) at 5,651.5 tokens per solved task, while the without-reproduction lane scored 8/18 (44.4%) at 3,843.4 tokens per solved task. This sweep is historical; the latest paired run uses Qwen3.5 4B and is reported separately above.

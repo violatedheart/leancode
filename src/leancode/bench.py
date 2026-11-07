@@ -56,6 +56,7 @@ class Score:
     steps: int
     seconds: float
     error: str = ""
+    agent_pass: bool | None = None
 
 
 @dataclass
@@ -100,7 +101,7 @@ def _test(repo: Path, command: str, hidden: Path | None = None) -> tuple[bool, s
                     raise ValueError(f"hidden test would overwrite {target}")
                 shutil.copy2(source, target)
                 copied.append(target)
-        result = subprocess.run(command, cwd=repo, shell=True, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(command, cwd=repo, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         return result.returncode == 0, (result.stdout + "\n" + result.stderr)[:10_000]
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, str(exc)
@@ -202,14 +203,15 @@ def format_results(scores: list[Score], model: str) -> str:
         "",
         f"Model: `{model}`. Every lane runs in a fresh temporary copy. Hidden tests are injected only while scoring.",
         "",
-        "| Task | Naive pass | Naive tokens | LeanCode pass | LeanCode tokens | Steps | Time (s) |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Task | Naive pass | Naive tokens | Agent pass | Scored pass | LeanCode tokens | Steps | Time (s) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for score in scores:
         not_run = bool(score.error and score.naive_tokens == 0 and score.leancode_tokens == 0 and score.steps == 0)
         naive_label = "n/a" if not_run else "yes" if score.naive_pass else "no"
         lean_label = "n/a" if not_run else "yes" if score.leancode_pass else "no"
-        rows.append(f"| {score.task} | {naive_label} | {score.naive_tokens} | {lean_label} | {score.leancode_tokens} | {score.steps} | {score.seconds:.2f} |")
+        agent_label = "n/a" if not_run else "yes" if score.agent_pass is True else "no" if score.agent_pass is False else lean_label
+        rows.append(f"| {score.task} | {naive_label} | {score.naive_tokens} | {agent_label} | {lean_label} | {score.leancode_tokens} | {score.steps} | {score.seconds:.2f} |")
     naive_total = sum(x.naive_tokens for x in scores)
     lean_total = sum(x.leancode_tokens for x in scores)
     reduction = f"{(naive_total - lean_total) / naive_total * 100:.1f}%" if naive_total else "n/a"
@@ -262,6 +264,7 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
         error = ""
         naive_pass = lean_pass = False
         naive_tokens = lean_tokens = steps = 0
+        agent_pass: bool | None = None
         try:
             _copy_task(task, naive_copy)
             naive = NaiveBaseline(naive_copy, task.task, task.test_cmd, client=OpenAICompatibleClient(base_url, chosen_model), budget=budget)
@@ -274,7 +277,8 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
             result = AgentRunner(lean_copy, task.task, test_cmd=task.test_cmd, budget=budget, model=chosen_model, base_url=base_url, features=measured_default_features()).run()
             steps = result.steps
             lean_tokens = result.ledger.summary()["total_tokens"]
-            lean_pass = result.status == "pass"
+            agent_pass = result.status == "pass"
+            lean_pass = agent_pass
             if task.hidden:
                 lean_pass, _ = _test(lean_copy, task.test_cmd, task.hidden)
             _collect_run_logs(lean_copy, project_root, task.id)
@@ -282,7 +286,7 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
             error = f"{type(exc).__name__}: {exc}"
         finally:
             shutil.rmtree(run_dir, ignore_errors=True)
-        scores.append(Score(task.id, naive_pass, naive_tokens, lean_pass, lean_tokens, steps, time.monotonic() - start, error))
+        scores.append(Score(task.id, naive_pass, naive_tokens, lean_pass, lean_tokens, steps, time.monotonic() - start, error, agent_pass))
         print(f"{task.id}: naive={'pass' if naive_pass else 'fail'} ({naive_tokens}), leancode={'pass' if lean_pass else 'fail'} ({lean_tokens})")
     _write_report(output, format_results(scores, chosen_model))
     return scores, output

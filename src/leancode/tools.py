@@ -138,7 +138,7 @@ class ProjectTools:
             return ToolResult("Reproduction rejected: temporary path collision.")
         try:
             path.write_text(source + "\n", encoding="utf-8")
-            result = subprocess.run(self.test_cmd, cwd=self.repo, shell=True, capture_output=True, text=True, timeout=self.timeout)
+            result = subprocess.run(self.test_cmd, cwd=self.repo, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=self.timeout)
             compressed = compress_test_output(result.stdout + "\n" + result.stderr, self.repo)
             if result.returncode == 0:
                 return ToolResult("Reproduction did not fail; no patch should be made from it.\n" + compressed)
@@ -185,7 +185,7 @@ class ProjectTools:
         if match.group(2):
             selector += "::" + match.group(2)
         try:
-            proc = subprocess.run([sys.executable, "-m", "pytest", "-q", selector], cwd=self.repo, capture_output=True, text=True, timeout=self.timeout)
+            proc = subprocess.run([sys.executable, "-m", "pytest", "-q", selector], cwd=self.repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=self.timeout)
             return ToolResult(f"exit={proc.returncode}\n{compress_test_output(proc.stdout + chr(10) + proc.stderr, self.repo)}")
         except (OSError, subprocess.TimeoutExpired) as exc:
             return ToolResult(f"target test failed to run: {exc}")
@@ -206,7 +206,7 @@ class ProjectTools:
             checks.append((["tsc", "--noEmit"], "tsc --noEmit"))
         for command, label in checks:
             try:
-                proc = subprocess.run(command, cwd=self.repo, capture_output=True, text=True, timeout=60)
+                proc = subprocess.run(command, cwd=self.repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
                 text = _cap((proc.stdout + "\n" + proc.stderr).strip())
                 results.append(f"{label}: exit={proc.returncode}\n{text}")
                 if proc.returncode:
@@ -247,7 +247,7 @@ class ProjectTools:
         if not self.test_cmd:
             return ToolResult("No --test-cmd was configured; test was not run.")
         try:
-            proc = subprocess.run(self.test_cmd, cwd=self.repo, shell=True, capture_output=True, text=True, timeout=self.timeout)
+            proc = subprocess.run(self.test_cmd, cwd=self.repo, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=self.timeout)
             output = compress_test_output(proc.stdout + "\n" + proc.stderr, self.repo)
             return ToolResult(f"exit={proc.returncode}\n{output}")
         except subprocess.TimeoutExpired as exc:

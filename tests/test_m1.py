@@ -2,11 +2,30 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from leancode.index import Symbol, SymbolIndex
+from leancode.index import Symbol, SymbolIndex, parse_symbols, syntax_check
 from leancode.tools import ProjectTools
 
 
 class M1Tests(unittest.TestCase):
+    def test_javascript_syntax_uses_node_when_tree_sitter_is_unavailable(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node is not installed")
+        path = Path.cwd() / "syntax-check.mjs"
+        self.assertTrue(syntax_check(path, "export function answer() { return 42; }"))
+        self.assertFalse(syntax_check(path, "export function answer( {"))
+
+    def test_javascript_symbols_are_indexed_without_a_grammar_pack(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            source = repo / "retry.js"
+            source.write_text(
+                "function retry(attempt) {\n    if (attempt > 2) return false;\n    return true;\n}\n",
+                encoding="utf-8",
+            )
+            symbols, _syntax = parse_symbols(source, repo)
+            self.assertEqual([(item.name, item.start_line, item.end_line) for item in symbols], [("retry", 1, 4)])
+
     def test_bm25_ranks_matching_symbol(self):
         index = SymbolIndex(Path.cwd())
         index.symbols = [
