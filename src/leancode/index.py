@@ -83,15 +83,16 @@ def parse_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
         if language == "python":
             return _python_symbols(path, repo)
         return _javascript_symbols(path, repo) if language in {"javascript", "typescript", "tsx"} else ([], None)
-    source = path.read_bytes()
+    raw_source = path.read_bytes()
+    source = raw_source.decode("utf-8-sig", "replace") if language == "python" else raw_source
     try:
-        tree = _parse(parser, source.decode("utf-8", "replace"))
+        tree = _parse(parser, source if isinstance(source, str) else source.decode("utf-8", "replace"))
     except (TypeError, UnicodeError):
         tree = _parse(parser, source)
     root = getattr(tree, "root_node", None)
     if root is None:
         root = tree.root_node
-    lines = source.decode("utf-8", "replace").splitlines()
+    lines = source.splitlines() if isinstance(source, str) else source.decode("utf-8", "replace").splitlines()
     found: list[Symbol] = []
     stack = [root]
     while stack:
@@ -119,7 +120,7 @@ def parse_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
 
 def _javascript_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
     """Extract common JS/TS function and class ranges without optional grammars."""
-    source = path.read_text(encoding="utf-8", errors="replace")
+    source = path.read_text(encoding="utf-8-sig", errors="replace")
     lines = source.splitlines()
     starts: list[tuple[int, str, str]] = []
     patterns = (
@@ -190,7 +191,7 @@ def _javascript_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | No
 
 def _python_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool]:
     """Use Python's built-in AST when the optional tree-sitter pack is absent."""
-    source = path.read_text(encoding="utf-8", errors="replace")
+    source = path.read_text(encoding="utf-8-sig", errors="replace")
     try:
         module = ast.parse(source)
     except SyntaxError:
@@ -224,6 +225,8 @@ def syntax_check(path: Path, source: str) -> bool | None:
     language = EXTENSIONS.get(path.suffix.lower())
     if not language:
         return None
+    if language == "python":
+        source = source.removeprefix("\ufeff")
     try:
         parser = _offline_parser(language)
     except (ImportError, OSError, RuntimeError, ValueError):
@@ -239,6 +242,7 @@ def syntax_check(path: Path, source: str) -> bool | None:
         has_error = getattr(root, "has_error", False)
         return not (has_error() if callable(has_error) else has_error)
     if language == "python":
+        source = source.removeprefix("\ufeff")
         try:
             ast.parse(source)
             return True

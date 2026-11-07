@@ -7,6 +7,16 @@ from leancode.tools import ProjectTools
 
 
 class M1Tests(unittest.TestCase):
+    def test_python_bom_file_is_indexed_and_syntax_checked(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            source = repo / "sample.py"
+            source.write_text("\ufeffdef format_duration(seconds):\n    return f'{seconds}s'\n", encoding="utf-8")
+            symbols, has_error = parse_symbols(source, repo)
+            self.assertFalse(has_error)
+            self.assertEqual([symbol.name for symbol in symbols], ["format_duration"])
+            self.assertTrue(syntax_check(source, source.read_text(encoding="utf-8")))
+
     def test_javascript_syntax_uses_node_when_tree_sitter_is_unavailable(self):
         import shutil
         if not shutil.which("node"):

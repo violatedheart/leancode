@@ -65,5 +65,5 @@ def expand_symbol_graph(index: SymbolIndex, candidates: list[tuple[object, float
 
 
 def read_symbol(repo: Path, symbol) -> str:
-    lines = (repo / symbol.path).read_text(encoding="utf-8", errors="replace").splitlines()
+    lines = (repo / symbol.path).read_text(encoding="utf-8-sig", errors="replace").splitlines()
     return "\n".join(f"{n}: {lines[n-1]}" for n in range(symbol.start_line, min(symbol.end_line, len(lines)) + 1))
