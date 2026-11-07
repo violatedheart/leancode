@@ -6,6 +6,9 @@ import json
 import math
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -241,6 +244,26 @@ def syntax_check(path: Path, source: str) -> bool | None:
             return True
         except SyntaxError:
             return False
+    if language == "javascript" and shutil.which("node"):
+        check_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", suffix=".mjs", encoding="utf-8", dir=path.parent, delete=False) as handle:
+                handle.write(source)
+                check_path = Path(handle.name)
+            result = subprocess.run(
+                ["node", "--check", str(check_path)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+            )
+            return result.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        finally:
+            if check_path is not None:
+                check_path.unlink(missing_ok=True)
     return None
 
 

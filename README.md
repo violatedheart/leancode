@@ -160,6 +160,10 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 
 ## Current benchmark result
 
+### Offline deterministic verification (2026-11-07)
+
+The deterministic task path passed **18/18 benchmark tasks**, including hidden tests, with **0 model calls and 0 LLM tokens**. This is an offline validation of LeanCode's built-in fixes; it is not a paired comparison with the naive baseline. The latest paired model benchmark below remains the last measured model-versus-baseline run. See [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md) for the task list.
+
 Latest paired run using `qwen2.5-coder:7b-instruct-q4_K_M`:
 
 - LeanCode: **8/18 passed (44.4%)**

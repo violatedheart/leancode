@@ -2,11 +2,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from leancode.index import Symbol, SymbolIndex, parse_symbols
+from leancode.index import Symbol, SymbolIndex, parse_symbols, syntax_check
 from leancode.tools import ProjectTools
 
 
 class M1Tests(unittest.TestCase):
+    def test_javascript_syntax_uses_node_when_tree_sitter_is_unavailable(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node is not installed")
+        path = Path.cwd() / "syntax-check.mjs"
+        self.assertTrue(syntax_check(path, "export function answer() { return 42; }"))
+        self.assertFalse(syntax_check(path, "export function answer( {"))
+
     def test_javascript_symbols_are_indexed_without_a_grammar_pack(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             repo = Path(directory)
