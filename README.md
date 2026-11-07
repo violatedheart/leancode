@@ -160,9 +160,15 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 
 ## Validation status
 
-An earlier benchmark result is invalidated: the agent contained task-specific solution templates that matched the bundled tasks, and its playbook included examples tailored to those tasks. Those shortcuts have been removed. The old report is retained with a warning for audit purposes in [RESULTS.md](RESULTS.md); do not present its 18/18 pass rate or token reduction as a valid agent benchmark.
+The first clean paired benchmark after removing task-specific solution templates and benchmark-matched playbook entries used `qwen2.5-coder:7b-instruct-q4_K_M`:
 
-Two separate, previously unbundled Qwen 3.5 4B tasks passed through the model path: a duration formatter (1,020 LLM tokens) and case-insensitive account lookup across two files (1,038 LLM tokens). These are small demonstrations, not a replacement for rerunning the full benchmark after removing the task-specific shortcuts. The old offline table is similarly marked invalid in [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md).
+- LeanCode scored **8/18 passed (44.4%)**, including hidden scoring tests.
+- Naive baseline scored **0/18 passed**.
+- LeanCode used **35,547 LLM tokens**; the naive baseline used **77,701** (54.3% fewer tokens).
+
+The naive baseline solved no tasks in this run, so the token reduction is not a same-pass-rate comparison. This is one measured run; see [RESULTS.md](RESULTS.md) for its task table. An earlier 18/18 and 100% result is invalidated because it used benchmark-specific solution templates; the old offline report remains marked invalid in [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md).
+
+Two separate, previously unbundled Qwen 3.5 4B tasks also passed through the model path: a duration formatter (1,020 LLM tokens) and case-insensitive account lookup across two files (1,038 LLM tokens). These are small demonstrations, not a statistically meaningful evaluation.
 
 ## Decisions
 
