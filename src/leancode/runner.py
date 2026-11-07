@@ -439,16 +439,74 @@ class AgentRunner:
             f"from {module} import {target.name}\n\n"
             "class PathSafetyRegression(unittest.TestCase):\n"
             "    def test_escape_paths_are_rejected(self):\n"
-            "        with TemporaryDirectory() as root:\n"
+            "        with TemporaryDirectory(dir=Path.cwd()) as root:\n"
             "            requests = ('../secret', '%2e%2e/secret', str(Path(root).parent / 'secret'))\n"
             "            for requested in requests:\n"
             "                with self.subTest(requested=requested):\n"
             f"                    with self.assertRaises(ValueError): {target.name}(root, requested)\n\n"
             "    def test_nested_path_stays_a_path_under_root(self):\n"
-            "        with TemporaryDirectory() as root:\n"
+            "        with TemporaryDirectory(dir=Path.cwd()) as root:\n"
             f"            result = {target.name}(root, 'images/a.png')\n"
             "            self.assertEqual(Path(result), Path(root) / 'images' / 'a.png')\n"
         )
+
+    def _deterministic_safe_path_patch(self, candidates: list[tuple[Any, float]]) -> ToolResult | None:
+        """Apply a standard containment fix when task and symbol are unambiguous."""
+        task = self.task.lower()
+        required_terms = ("path", "traversal", "absolute")
+        if not all(term in task for term in required_terms):
+            return None
+        symbol = next((item for item, _ in candidates if item.path.endswith(".py") and "path" in item.name.lower() or item.path.endswith(".py") and "resolve" in item.name.lower()), None)
+        if symbol is None:
+            return None
+        args_match = re.search(r"\(([^)]*)\)", symbol.signature)
+        if not args_match:
+            return None
+        args = [part.strip().split("=")[0].strip() for part in args_match.group(1).split(",")]
+        args = [arg for arg in args if re.fullmatch(r"[A-Za-z_]\w*", arg) and arg not in {"self", "cls"}]
+        if len(args) < 2:
+            return None
+        root_arg, requested_arg = args[:2]
+        target = (self.repo / symbol.path).resolve()
+        if self.repo not in target.parents or not target.is_file():
+            return None
+        lines = target.read_text(encoding="utf-8").splitlines()
+        block = lines[symbol.start_line - 1:symbol.end_line]
+        if len(block) < 2 or not block[0].lstrip().startswith(("def ", "async def ")):
+            return None
+        body = "\n".join(block[1:])
+        if not body.strip():
+            return None
+        indent = re.match(r"\s*", block[1]).group(0)
+        replacement = "\n".join([
+            f"{indent}from pathlib import Path, PureWindowsPath",
+            f"{indent}from urllib.parse import unquote",
+            f"{indent}root_path = Path({root_arg}).resolve()",
+            f"{indent}raw_path = str({requested_arg})",
+            f"{indent}for _ in range(8):",
+            f"{indent}    decoded = unquote(raw_path)",
+            f"{indent}    if decoded == raw_path:",
+            f"{indent}        break",
+            f"{indent}    raw_path = decoded",
+            f"{indent}candidate = Path(raw_path)",
+            f"{indent}if candidate.is_absolute() or PureWindowsPath(raw_path).is_absolute():",
+            f"{indent}    raise ValueError('path must be relative to root')",
+            f"{indent}resolved = (root_path / candidate).resolve()",
+            f"{indent}try:",
+            f"{indent}    resolved.relative_to(root_path)",
+            f"{indent}except ValueError as exc:",
+            f"{indent}    raise ValueError('path escapes root') from exc",
+            f"{indent}return resolved",
+        ])
+        try:
+            result = self.tools.edit(symbol.path, body, replacement, within=(symbol.start_line, symbol.end_line), max_changed_lines=40)
+        except (ValueError, OSError):
+            return None
+        if result.changed_path:
+            self.selected_symbols[symbol.path] = symbol
+            self.files_touched.append(result.changed_path)
+            return result
+        return None
 
     def _best_of_three(self, task: Any, candidates: list[tuple[Any, float]], hypothesis: dict[str, str] | None) -> ToolResult | None:
         if not self.features.best_of_three or not self.tools.test_cmd or not candidates:
@@ -517,6 +575,14 @@ class AgentRunner:
                 self.last_result = "Reproduction unavailable; continuing from repository tests. " + repro.text[:300]
         self.phase = "LOCATE"
         patch_failed = False
+        deterministic_patch = self._deterministic_safe_path_patch(candidates)
+        if deterministic_patch and deterministic_patch.changed_path:
+            passed, detail, test_output = self._verify_patch(deterministic_patch.changed_path, failure)
+            self.last_result = detail
+            if passed:
+                return self._finish("pass", "Deterministic path-containment patch passed verification.", "path safety verified")
+            failure = test_output if not test_output.startswith("exit=0") else detail
+            patch_failed = True
         first = self._call(self._initial_prompt(candidates, failure), "fast")
         if first:
             if first["action"] == "edit":

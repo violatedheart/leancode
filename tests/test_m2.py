@@ -55,6 +55,30 @@ def action(name, **values):
 
 
 class M2Tests(unittest.TestCase):
+    def test_deterministic_safe_path_patch_rejects_escape_and_preserves_path_type(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            (repo / "paths.py").write_text(
+                "from pathlib import Path\n\ndef resolve_under(root, requested):\n    return (Path(root) / requested).resolve()\n",
+                encoding="utf-8",
+            )
+            import sys
+            tools = ProjectTools(repo, f'"{sys.executable}" -m unittest discover -s tests -q')
+            symbol = Symbol("paths.py", "resolve_under", "function_definition", 3, 4, "def resolve_under(root, requested):", ["resolve_under", "path"])
+            agent = AgentRunner(
+                repo,
+                "Reject path traversal, absolute paths, and encoded dot segments while allowing nested paths under the root.",
+                client=FakeClient([]),
+                tools=tools,
+            )
+            patched = agent._deterministic_safe_path_patch([(symbol, 1.0)])
+            self.assertIsNotNone(patched)
+            self.assertTrue(patched and patched.changed_path)
+            (repo / "tests").mkdir()
+            (repo / "tests" / "test_path.py").write_text(agent._deterministic_path_probe([(symbol, 1.0)]) or "", encoding="utf-8")
+            result = tools.test()
+            self.assertTrue(result.text.startswith("exit=0"), result.text)
+
     def test_path_task_gets_zero_llm_security_reproduction_probe(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             repo = Path(directory)
