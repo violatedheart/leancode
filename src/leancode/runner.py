@@ -60,7 +60,10 @@ def measured_default_features() -> RunFeatures:
     # can consume three calls before the agent has tried a repair with the
     # actual failing output, so it is opt-in until a current-model sweep proves
     # it improves solved tasks per token.
-    return RunFeatures(reproduce=False, hypothesize=True, best_of_three=False, playbook=True, notes=True)
+    # Reserve the hypothesis call for later repair attempts: the clean Qwen
+    # run exhausted all six steps on several failures, and the extra call left
+    # one fewer chance to apply a test-guided correction.
+    return RunFeatures(reproduce=False, hypothesize=False, best_of_three=False, playbook=True, notes=True)
 
 
 @dataclass
@@ -72,6 +75,7 @@ class RunResult:
     run_id: str
     ledger: RunLedger
     diff: str = ""
+    last_result: str = ""
 
 
 class AgentRunner:
@@ -361,7 +365,7 @@ class AgentRunner:
             passing_trace(self.repo, self.run_id, self.task, self.trace_pairs)
         assumption = self.acceptance[0] if self.acceptance else "interpreted the task conservatively"
         summary = f"{summary} Assumption: {assumption[:120]}"
-        return RunResult(status, summary, reason, self.steps, self.run_id, self.ledger, self._diff())
+        return RunResult(status, summary, reason, self.steps, self.run_id, self.ledger, self._diff(), self.last_result)
 
     def _diff(self) -> str:
         rows = []

@@ -57,6 +57,7 @@ class Score:
     seconds: float
     error: str = ""
     agent_pass: bool | None = None
+    agent_diagnostic: str = ""
 
 
 @dataclass
@@ -230,6 +231,10 @@ def format_results(scores: list[Score], model: str) -> str:
     errors = [x for x in scores if x.error]
     if errors:
         rows += ["", "## Run errors", ""] + [f"- {item.task}: {item.error}" for item in errors]
+    diagnostics = [score for score in scores if score.agent_pass is False and score.agent_diagnostic]
+    if diagnostics:
+        rows += ["", "## LeanCode visible-test diagnostics", "", "These are from the agent-visible test run; hidden scoring tests are not included.", ""]
+        rows += [f"- **{score.task}:** {score.agent_diagnostic.replace(chr(10), ' ')[:700]}" for score in diagnostics]
     return "\n".join(rows) + "\n"
 
 
@@ -265,6 +270,7 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
         naive_pass = lean_pass = False
         naive_tokens = lean_tokens = steps = 0
         agent_pass: bool | None = None
+        agent_diagnostic = ""
         try:
             _copy_task(task, naive_copy)
             naive = NaiveBaseline(naive_copy, task.task, task.test_cmd, client=OpenAICompatibleClient(base_url, chosen_model), budget=budget)
@@ -278,15 +284,18 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
             steps = result.steps
             lean_tokens = result.ledger.summary()["total_tokens"]
             agent_pass = result.status == "pass"
+            agent_diagnostic = f"{result.reason}: {result.last_result}".strip()[:700]
             lean_pass = agent_pass
             if task.hidden:
                 lean_pass, _ = _test(lean_copy, task.test_cmd, task.hidden)
+                if agent_pass and not lean_pass:
+                    agent_diagnostic = "visible tests passed; hidden scoring tests failed"
             _collect_run_logs(lean_copy, project_root, task.id)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
         finally:
             shutil.rmtree(run_dir, ignore_errors=True)
-        scores.append(Score(task.id, naive_pass, naive_tokens, lean_pass, lean_tokens, steps, time.monotonic() - start, error, agent_pass))
+        scores.append(Score(task.id, naive_pass, naive_tokens, lean_pass, lean_tokens, steps, time.monotonic() - start, error, agent_pass, agent_diagnostic))
         print(f"{task.id}: naive={'pass' if naive_pass else 'fail'} ({naive_tokens}), leancode={'pass' if lean_pass else 'fail'} ({lean_tokens})")
     _write_report(output, format_results(scores, chosen_model))
     return scores, output

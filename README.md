@@ -177,5 +177,5 @@ Two separate, previously unbundled Qwen 3.5 4B tasks also passed through the mod
 - **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser and a lightweight JavaScript/TypeScript symbol scanner when grammars are missing.
 - **Task workflow:** localize code first, ask the model for a small search/replace edit, run tests, and use a bounded repair loop only when needed.
 - **Safety:** edits stay in the target repository and selected symbols; test execution uses only the user's configured command.
-- **Feature defaults:** feature settings are configurable. Prior sweeps are historical and used the same benchmark set; rerun them after removing benchmark-specific templates before relying on those scores.
+- **Feature defaults:** hypothesis generation is off by default so a failed fast patch can use the call for a test-guided repair; reproduction and best-of-three remain opt-in. Re-evaluate these settings with the clean benchmark.
 

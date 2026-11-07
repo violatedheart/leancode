@@ -15,7 +15,7 @@ class ExpertWorkflowTests(unittest.TestCase):
     def test_default_features_preserve_calls_for_feedback_repairs(self):
         features = measured_default_features()
         self.assertFalse(features.reproduce)
-        self.assertTrue(features.hypothesize)
+        self.assertFalse(features.hypothesize)
         self.assertFalse(features.best_of_three)
         self.assertTrue(features.playbook)
         self.assertTrue(features.notes)

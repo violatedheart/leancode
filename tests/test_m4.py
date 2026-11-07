@@ -25,6 +25,11 @@ class M4Tests(unittest.TestCase):
         text = format_results([Score("one", True, 1000, False, 700, 2, 2.5, agent_pass=True)], "local-model")
         self.assertIn("| one | yes | 1000 | yes | no | 700 | 2 | 2.50 |", text)
 
+    def test_results_include_visible_failure_diagnostics(self):
+        text = format_results([Score("one", False, 1000, False, 700, 2, 2.5, agent_pass=False, agent_diagnostic="step limit: assertion failed")], "local-model")
+        self.assertIn("LeanCode visible-test diagnostics", text)
+        self.assertIn("assertion failed", text)
+
     def test_zero_baseline_tokens_reports_na(self):
         text = format_results([Score("one", False, 0, False, 0, 0, 0)], "local-model")
         self.assertIn("Token reduction: n/a", text)
