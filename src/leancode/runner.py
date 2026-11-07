@@ -60,7 +60,7 @@ def measured_default_features() -> RunFeatures:
     # can consume three calls before the agent has tried a repair with the
     # actual failing output, so it is opt-in until a current-model sweep proves
     # it improves solved tasks per token.
-    return RunFeatures(reproduce=True, hypothesize=True, best_of_three=False, playbook=True, notes=True)
+    return RunFeatures(reproduce=False, hypothesize=True, best_of_three=False, playbook=True, notes=True)
 
 
 @dataclass
