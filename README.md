@@ -160,13 +160,13 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 
 ## Current benchmark result
 
-Using `qwen2.5-coder:7b-instruct-q4_K_M`:
+Latest paired run using `qwen3.5:4b`:
 
-- LeanCode: **8/18 passed (44.4%)**
-- Naive baseline: **0/18 passed**
-- LeanCode tokens: **30,299**
-- Naive baseline tokens: **75,717**
-- Token reduction: **60.0%**
+- LeanCode: **9/18 passed (50.0%)**
+- Naive baseline: **7/18 passed (38.9%)**
+- LeanCode tokens: **55,060**
+- Naive baseline tokens: **69,808**
+- Token reduction: **21.1%**
 
 See [RESULTS.md](RESULTS.md) for the paired task-by-task table and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations. These results measure this small benchmark set; the remaining failures still need investigation.
 
@@ -177,5 +177,5 @@ See [RESULTS.md](RESULTS.md) for the paired task-by-task table and [SWEEP_RESULT
 - **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser when the Tree-sitter pack is missing. JavaScript/TypeScript currently require Tree-sitter grammars.
 - **Task workflow:** localize code first, ask the model for a small search/replace edit, run tests, and use a bounded repair loop only when needed.
 - **Safety:** edits stay in the target repository and selected symbols; test execution uses only the user's configured command.
-- **Feature defaults:** the Qwen2.5-Coder sweep selected hypothesis, best-of-three, playbook, and notes; reproduction stays opt-in because the all-on lane scored 6/18 (33.3%) at 5,651.5 tokens per solved task, while the without-reproduction lane scored 8/18 (44.4%) at 3,843.4 tokens per solved task. A fresh paired run with the selected profile also scored 8/18 and used 30,299 LeanCode tokens, a 2.2% reduction from the 30,973-token fast-path run with the same pass rate.
+- **Feature defaults:** the Qwen2.5-Coder sweep selected hypothesis, best-of-three, playbook, and notes; reproduction stays opt-in because the all-on lane scored 6/18 (33.3%) at 5,651.5 tokens per solved task, while the without-reproduction lane scored 8/18 (44.4%) at 3,843.4 tokens per solved task. This sweep is historical; the latest paired run uses Qwen3.5 4B and is reported separately above.
 
