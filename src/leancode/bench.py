@@ -100,7 +100,7 @@ def _test(repo: Path, command: str, hidden: Path | None = None) -> tuple[bool, s
                     raise ValueError(f"hidden test would overwrite {target}")
                 shutil.copy2(source, target)
                 copied.append(target)
-        result = subprocess.run(command, cwd=repo, shell=True, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(command, cwd=repo, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         return result.returncode == 0, (result.stdout + "\n" + result.stderr)[:10_000]
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, str(exc)

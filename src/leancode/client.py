@@ -42,7 +42,10 @@ class OpenAICompatibleClient:
         }
         if urlparse(self.base_url).port == 11434:
             body["options"] = {"num_ctx": 4096}
-            body["think"] = False
+            # Ollama's OpenAI-compatible endpoint does not consistently honor
+            # the native `think` flag. `reasoning_effort: none` disables
+            # thinking there, leaving the completion budget for the action.
+            body["reasoning_effort"] = "none"
         if json_schema:
             body["response_format"] = {"type": "json_schema", "json_schema": json_schema}
         prompt_text = "\n".join(m.get("content", "") for m in messages)

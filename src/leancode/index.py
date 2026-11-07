@@ -79,7 +79,7 @@ def parse_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
     if parser is None:
         if language == "python":
             return _python_symbols(path, repo)
-        return [], None
+        return _javascript_symbols(path, repo) if language in {"javascript", "typescript", "tsx"} else ([], None)
     source = path.read_bytes()
     try:
         tree = _parse(parser, source.decode("utf-8", "replace"))
@@ -109,7 +109,80 @@ def parse_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
             symbol_kind = "arrow_function" if is_arrow_binding else kind
             found.append(Symbol(path.relative_to(repo).as_posix(), _name(node, source), symbol_kind, start, end, signature, identifiers))
         stack.extend(reversed(_children(node)))
+    if not found and language in {"javascript", "typescript", "tsx"}:
+        return _javascript_symbols(path, repo)
     return found, bool(getattr(root, "has_error", False)() if callable(getattr(root, "has_error", None)) else getattr(root, "has_error", False))
+
+
+def _javascript_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool | None]:
+    """Extract common JS/TS function and class ranges without optional grammars."""
+    source = path.read_text(encoding="utf-8", errors="replace")
+    lines = source.splitlines()
+    starts: list[tuple[int, str, str]] = []
+    patterns = (
+        (re.compile(r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)\s*\("), "function_declaration"),
+        (re.compile(r"^\s*(?:export\s+)?class\s+([\w$]+)\b"), "class_declaration"),
+        (re.compile(r"^\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*=>"), "arrow_function"),
+    )
+    for index, line in enumerate(lines):
+        for pattern, kind in patterns:
+            match = pattern.search(line)
+            if match:
+                starts.append((index, match.group(1), kind))
+                break
+
+    def end_line(start: int) -> int:
+        text = "\n".join(lines[start:])
+        opening = text.find("{")
+        if opening < 0:
+            return start + 1
+        depth = 0
+        quote = ""
+        escaped = False
+        line_comment = False
+        block_comment = False
+        i = opening
+        while i < len(text):
+            char = text[i]
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+            if line_comment:
+                if char == "\n":
+                    line_comment = False
+            elif block_comment:
+                if char == "*" and nxt == "/":
+                    block_comment = False
+                    i += 1
+            elif quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = ""
+            elif char == "/" and nxt == "/":
+                line_comment = True
+                i += 1
+            elif char == "/" and nxt == "*":
+                block_comment = True
+                i += 1
+            elif char in {"'", '"', "`"}:
+                quote = char
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return start + text[:i + 1].count("\n") + 1
+            i += 1
+        return len(lines)
+
+    found = []
+    for start, name, kind in starts:
+        finish = end_line(start)
+        segment = "\n".join(lines[start:finish])
+        signature = next((line.strip() for line in segment.splitlines() if line.strip()), "")[:240]
+        found.append(Symbol(path.relative_to(repo).as_posix(), name, kind, start + 1, finish, signature, list(dict.fromkeys(tokens(segment)))))
+    return found, None
 
 
 def _python_symbols(path: Path, repo: Path) -> tuple[list[Symbol], bool]:

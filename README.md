@@ -163,18 +163,18 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 Latest paired run using `qwen3.5:4b`:
 
 - LeanCode: **7/18 passed (38.9%)**
-- Naive baseline: **8/18 passed (44.4%)**
-- LeanCode tokens: **57,068**
-- Naive baseline tokens: **64,931**
-- Token reduction: **12.1%**
+- Naive baseline: **14/18 passed (77.8%)**
+- LeanCode tokens: **36,154**
+- Naive baseline tokens: **18,947**
+- Token reduction: **-90.8%** (LeanCode used more tokens in this run)
 
-The previous run with the same model scored 9/18 for LeanCode and 7/18 for the baseline, showing run-to-run variation. See [RESULTS.md](RESULTS.md) for the latest paired table, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the two-task playbook check, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
+The local 4B model's results vary between runs. The latest result shows that LeanCode still needs pass-rate and token-efficiency work; the benchmark is reported without excluding failed tasks. See [RESULTS.md](RESULTS.md) for the full paired table, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the latest focused run, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
 
 ## Decisions
 
 - **Interface:** Python CLI with `argparse`; no agent framework.
 - **Model runtime:** Ollama locally by default, with an OpenAI-compatible base URL and model name for swapping servers.
-- **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser when the Tree-sitter pack is missing. JavaScript/TypeScript currently require Tree-sitter grammars.
+- **Indexing fallback:** use Tree-sitter grammars when available; use Python's built-in AST parser and a lightweight JavaScript/TypeScript symbol scanner when grammars are missing.
 - **Task workflow:** localize code first, ask the model for a small search/replace edit, run tests, and use a bounded repair loop only when needed.
 - **Safety:** edits stay in the target repository and selected symbols; test execution uses only the user's configured command.
 - **Feature defaults:** the Qwen2.5-Coder sweep selected hypothesis, best-of-three, playbook, and notes; reproduction stays opt-in because the all-on lane scored 6/18 (33.3%) at 5,651.5 tokens per solved task, while the without-reproduction lane scored 8/18 (44.4%) at 3,843.4 tokens per solved task. This sweep is historical; the latest paired run uses Qwen3.5 4B and is reported separately above.

@@ -31,7 +31,7 @@ class M5Tests(unittest.TestCase):
         self.assertEqual(body["temperature"], 0.0)
         self.assertEqual(body["max_tokens"], 100)
         self.assertEqual(body["options"]["num_ctx"], 4096)
-        self.assertIs(body["think"], False)
+        self.assertEqual(body["reasoning_effort"], "none")
         self.assertIn("response_format", body)
         self.assertEqual(result.content, "{}")
 
