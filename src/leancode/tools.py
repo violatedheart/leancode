@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import shlex
 import shutil
@@ -27,6 +28,26 @@ def _safe_path(repo: Path, raw: str) -> Path:
 def _cap(text: str) -> str:
     suffix = "\n[output capped]"
     return text[:MAX_TOOL_CHARS - len(suffix)] + suffix if len(text) > MAX_TOOL_CHARS else text
+
+
+def _unreachable_python_statements(source: str) -> int:
+    """Count statements placed after an unconditional terminator in a suite."""
+    try:
+        tree = ast.parse(source.removeprefix("\ufeff"))
+    except SyntaxError:
+        return 0
+    count = 0
+    for node in ast.walk(tree):
+        for _field, children in ast.iter_fields(node):
+            if not isinstance(children, list) or not children or not all(isinstance(child, ast.stmt) for child in children):
+                continue
+            terminated = False
+            for child in children:
+                if terminated:
+                    count += 1
+                if isinstance(child, (ast.Return, ast.Raise, ast.Break, ast.Continue)):
+                    terminated = True
+    return count
 
 
 @dataclass
@@ -111,6 +132,8 @@ class ProjectTools:
         if valid is not True:
             reason = "Syntax check failed" if valid is False else "No offline syntax grammar available"
             return ToolResult(f"{reason}; edit discarded.", syntax_ok=False)
+        if resolved.suffix.lower() in {".py", ".pyi"} and _unreachable_python_statements(updated) > _unreachable_python_statements(content):
+            return ToolResult("Review rejected new unreachable Python statements after return/raise/break/continue.", syntax_ok=True)
         resolved.write_text(updated, encoding="utf-8")
         self.index = SymbolIndex(self.repo).build(force=True)
         return ToolResult(f"Edited {path}; syntax check passed.", path, True)

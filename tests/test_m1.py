@@ -119,6 +119,17 @@ class M1Tests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     tools.read("../outside.py", 1, 2)
 
+    def test_edit_rejects_new_python_code_after_return(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            source = repo / "sample.py"
+            original = "def value():\n    return 0\n"
+            source.write_text(original, encoding="utf-8")
+            tools = ProjectTools(repo, None)
+            result = tools.edit("sample.py", "return 0", "return 1\n    duplicate = 2")
+            self.assertIn("unreachable Python statements", result.text)
+            self.assertEqual(source.read_text(encoding="utf-8"), original)
+
     def test_test_tool_never_runs_without_configured_command(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             result = ProjectTools(Path(directory), None).test()
