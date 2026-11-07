@@ -1,17 +1,20 @@
 # LeanCode benchmark results
 
-Model: `qwen3.5:4b`. Every lane runs in a fresh temporary copy. Hidden tests are injected only while scoring.
+Model: `qwen2.5-coder:7b-instruct-q4_K_M`. Every lane runs in a fresh temporary copy. Hidden tests are injected only while scoring.
 
 | Task | Naive pass | Naive tokens | LeanCode pass | LeanCode tokens | Steps | Time (s) |
 |---|---:|---:|---:|---:|---:|---:|
-| 11-js-slugify | no | 6222 | no | 3265 | 6 | 37.95 |
-| 12-js-retry-delay | no | 6496 | no | 2819 | 6 | 29.44 |
-| 16-js-retry-classifier | yes | 578 | no | 3508 | 6 | 29.59 |
-| 18-pagination-multifile | yes | 471 | no | 1344 | 2 | 16.45 |
+| 02-palindrome-normalize | no | 4581 | no | 5618 | 6 | 84.95 |
+| 09-invoice-tax-multifile | no | 4383 | no | 3864 | 6 | 55.28 |
+| 13-env-port-multifile | no | 0 | no | 3197 | 6 | 40.91 |
+| 14-csv-total-multifile | no | 0 | no | 658 | 1 | 10.52 |
+| 15-cache-expiry-multifile | no | 4113 | yes | 838 | 1 | 31.31 |
+| 17-safe-path-multifile | no | 5822 | no | 675 | 1 | 37.67 |
+| 18-pagination-multifile | no | 4011 | yes | 718 | 1 | 31.80 |
 
-- Tasks: 4
-- Naive pass rate: 2/4 (50.0%)
-- LeanCode pass rate: 0/4 (0.0%)
-- Naive total tokens: 13767
-- LeanCode total tokens: 10936
-- Token reduction: 20.6%
+- Tasks: 7
+- Naive pass rate: 0/7 (0.0%)
+- LeanCode pass rate: 2/7 (28.6%)
+- Naive total tokens: 22910
+- LeanCode total tokens: 15568
+- Token reduction: 32.0%
