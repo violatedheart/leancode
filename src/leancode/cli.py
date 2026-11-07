@@ -32,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--base-url")
     bench.add_argument("--sweep", action="store_true", help="ablate expert workflow features across all benchmark tasks")
     bench.add_argument("--fresh", action="store_true", help="discard saved sweep progress and start from the first task")
+    bench.add_argument("--task", action="append", dest="task_ids", help="run one benchmark task by id; repeat to select multiple tasks")
     return parser
 
 
@@ -68,12 +69,15 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if args.command == "bench":
         try:
+            if args.sweep and args.task_ids:
+                print("leancode: --task cannot be combined with --sweep", file=sys.stderr)
+                return 2
             cwd = Path.cwd().resolve()
             project_root = cwd if (cwd / "bench" / "manifest.json").is_file() else Path(__file__).resolve().parents[2]
             if args.sweep:
                 scores, output = run_sweep(project_root, model=args.model, base_url=args.base_url, budget=args.budget, resume=not args.fresh)
             else:
-                scores, output = run_benchmark(project_root, model=args.model, base_url=args.base_url, budget=args.budget)
+                scores, output = run_benchmark(project_root, model=args.model, base_url=args.base_url, budget=args.budget, task_ids=args.task_ids)
             print(f"\nWrote {output}")
             if args.sweep:
                 failed_to_run = any(

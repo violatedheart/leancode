@@ -145,11 +145,12 @@ leancode doctor                 Detect hardware and recommend a model
 leancode run --repo . ...       Solve one coding task with measured defaults
 leancode run --expert-workflow  Also generate and validate a failing test first
 leancode bench                  Compare LeanCode with the naive baseline
+leancode bench --task 02-palindrome-normalize --task 07-parse-bool  Run selected tasks only
 leancode bench --sweep          Compare workflow feature settings
 leancode bench --sweep --fresh  Ignore saved sweep progress and restart
 ```
 
-The benchmark uses 18 isolated tasks. The feature sweep compares six settings over the same tasks and can take a while. It checkpoints each completed task in `.leancode/sweep-progress.json`, writes `SWEEP_RESULTS.md` as it runs, and resumes by default. Use `--fresh` to restart the sweep. `RESULTS.md` remains the paired LeanCode versus naive report.
+The benchmark uses 18 isolated tasks. Use repeatable `--task <id>` options to run a focused subset; this writes `RESULTS_FOCUSED.md` and leaves the full `RESULTS.md` report intact. The feature sweep compares six settings over the same tasks and can take a while. It checkpoints each completed task in `.leancode/sweep-progress.json`, writes `SWEEP_RESULTS.md` as it runs, and resumes by default. Use `--fresh` to restart the sweep. `--task` cannot be combined with `--sweep`.
 
 ## Token use and logs
 

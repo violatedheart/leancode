@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from leancode.bench import Score, format_results, load_tasks
+from leancode.cli import build_parser
 
 
 class M4Tests(unittest.TestCase):
@@ -28,6 +29,16 @@ class M4Tests(unittest.TestCase):
         text = format_results([Score("one", False, 0, False, 0, 0, 0, "endpoint unavailable")], "local-model")
         self.assertIn("| one | n/a | 0 | n/a | 0 | 0 | 0.00 |", text)
         self.assertIn("pass rate: n/a (no model runs)", text)
+
+    def test_benchmark_can_select_tasks_without_changing_full_benchmark(self):
+        args = build_parser().parse_args(["bench", "--task", "02-palindrome-normalize", "--task", "07-parse-bool"])
+        self.assertEqual(args.task_ids, ["02-palindrome-normalize", "07-parse-bool"])
+        self.assertFalse(args.sweep)
+
+    def test_sweep_task_filter_conflict_is_parsed(self):
+        args = build_parser().parse_args(["bench", "--sweep", "--task", "01-sum-last-item"])
+        self.assertTrue(args.sweep)
+        self.assertEqual(args.task_ids, ["01-sum-last-item"])
 
 
 if __name__ == "__main__":

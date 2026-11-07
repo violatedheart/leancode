@@ -231,18 +231,27 @@ def format_results(scores: list[Score], model: str) -> str:
     return "\n".join(rows) + "\n"
 
 
-def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str | None = None, budget: int = 6000) -> tuple[list[Score], Path]:
+def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str | None = None, budget: int = 6000, task_ids: list[str] | None = None) -> tuple[list[Score], Path]:
     project_root = project_root.resolve()
     chosen_model = model or OpenAICompatibleClient(base_url=base_url).model
     bench_root = project_root / "bench"
     temp_root = bench_root / ".tmp"
     temp_root.mkdir(parents=True, exist_ok=True)
-    tasks = load_tasks(project_root)
+    all_tasks = load_tasks(project_root)
+    if task_ids:
+        requested = list(dict.fromkeys(task_ids))
+        known = {task.id for task in all_tasks}
+        unknown = [task_id for task_id in requested if task_id not in known]
+        if unknown:
+            raise ValueError(f"Unknown benchmark task id(s): {', '.join(unknown)}")
+        tasks = [task for task in all_tasks if task.id in requested]
+    else:
+        tasks = all_tasks
+    output = project_root / ("RESULTS_FOCUSED.md" if task_ids else "RESULTS.md")
     scores: list[Score] = []
     if not _endpoint_available(base_url):
         error = "local OpenAI-compatible endpoint unavailable; start Ollama or llama-server and retry"
         scores = [Score(task.id, False, 0, False, 0, 0, 0.0, error) for task in tasks]
-        output = project_root / "RESULTS.md"
         _write_report(output, format_results(scores, chosen_model))
         return scores, output
     for task in tasks:
@@ -275,7 +284,6 @@ def run_benchmark(project_root: Path, *, model: str | None = None, base_url: str
             shutil.rmtree(run_dir, ignore_errors=True)
         scores.append(Score(task.id, naive_pass, naive_tokens, lean_pass, lean_tokens, steps, time.monotonic() - start, error))
         print(f"{task.id}: naive={'pass' if naive_pass else 'fail'} ({naive_tokens}), leancode={'pass' if lean_pass else 'fail'} ({lean_tokens})")
-    output = project_root / "RESULTS.md"
     _write_report(output, format_results(scores, chosen_model))
     return scores, output
 
