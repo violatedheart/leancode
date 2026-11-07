@@ -18,6 +18,12 @@ EXAMPLES = [
     ("unicode accent insensitive palindrome normalization", "unicodedata.normalize('NFD', text.casefold())", "decompose accents, then keep only alphanumeric code points so combining marks do not break comparisons"),
     ("fibonacci zero base case", "if n == 0: return 0", "define both base cases before the iteration"),
     ("retry exponential backoff cap", "min(max_ms, base_ms * 2 ** attempt)", "use exponential growth and clamp the result to the cap"),
+    ("boolean parser strings numeric yes no on off", "mapping = {'1': True, '0': False, 'yes': True, 'no': False}", "strip and case-fold strings; accept common true/false aliases, preserve bool inputs, reject unknowns"),
+    ("decimal currency CSV exact total blank rows", "from decimal import Decimal", "skip missing or blank amounts and sum Decimal(str(value)) instead of floats"),
+    ("safe path traversal absolute encoded dot segment", "unquote(requested)", "decode URL escapes before checking; reject absolute paths and verify resolved target is relative to resolved root"),
+    ("retry classifier transient HTTP status 429 5xx", "status == 429 or 500 <= status < 600", "retry rate limits and server errors only; stop at the configured attempt limit"),
+    ("median even length do not mutate", "ordered = sorted(values)", "sort a copy, then average both middle values when the length is even"),
+    ("port parse default trim range validation", "port = int(value.strip())", "blank input uses the default; reject parse failures and ports outside 1 through 65535"),
 ]
 
 
