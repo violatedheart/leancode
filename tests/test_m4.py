@@ -19,7 +19,11 @@ class M4Tests(unittest.TestCase):
         text = format_results([Score("one", True, 1000, True, 700, 1, 2.5)], "local-model")
         self.assertIn("Token reduction: 30.0%", text)
         self.assertIn("Naive pass rate: 1/1", text)
-        self.assertIn("| Task | Naive pass | Naive tokens | LeanCode pass | LeanCode tokens | Steps | Time (s) |", text)
+        self.assertIn("| Task | Naive pass | Naive tokens | Agent pass | Scored pass | LeanCode tokens | Steps | Time (s) |", text)
+
+    def test_results_separate_agent_verification_from_benchmark_scoring(self):
+        text = format_results([Score("one", True, 1000, False, 700, 2, 2.5, agent_pass=True)], "local-model")
+        self.assertIn("| one | yes | 1000 | yes | no | 700 | 2 | 2.50 |", text)
 
     def test_zero_baseline_tokens_reports_na(self):
         text = format_results([Score("one", False, 0, False, 0, 0, 0)], "local-model")
@@ -27,7 +31,7 @@ class M4Tests(unittest.TestCase):
 
     def test_no_endpoint_is_reported_as_not_run(self):
         text = format_results([Score("one", False, 0, False, 0, 0, 0, "endpoint unavailable")], "local-model")
-        self.assertIn("| one | n/a | 0 | n/a | 0 | 0 | 0.00 |", text)
+        self.assertIn("| one | n/a | 0 | n/a | n/a | 0 | 0 | 0.00 |", text)
         self.assertIn("pass rate: n/a (no model runs)", text)
 
     def test_benchmark_can_select_tasks_without_changing_full_benchmark(self):
