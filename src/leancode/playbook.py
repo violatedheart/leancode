@@ -5,25 +5,9 @@ import math
 from .index import tokens
 
 EXAMPLES = [
-    ("off-by-one loop last item", "for item in items[:-1]:", "iterate over items; avoid dropping the final element"),
-    ("None handling optional empty", "return 0 if value is None else value", "handle None explicitly before arithmetic or access"),
-    ("wrong comparison operator boundary", "if count > limit:", "use >= when the boundary value is included"),
     ("missing import name error", "import math", "add the narrow standard-library import used by this function"),
     ("bad API usage keyword argument", "client.get(url, timeout=timeout)", "match the installed API signature and pass named options"),
     ("wrong default mutable list", "def f(items=None):", "use None as the default and allocate a fresh list inside"),
-    ("round currency final total", "round(subtotal * (1 - rate), 2)", "round once after all arithmetic, to the currency precision"),
-    ("stable unique order", "list(dict.fromkeys(values))", "deduplicate while preserving first-seen order"),
-    ("empty average division", "return None if not values else sum(values) / len(values)", "handle empty input before dividing"),
-    ("case insensitive trimmed boolean", "value.strip().lower()", "normalize surrounding whitespace and case before parsing"),
-    ("unicode accent insensitive palindrome normalization", "unicodedata.normalize('NFD', text.casefold())", "decompose accents, then keep only alphanumeric code points so combining marks do not break comparisons"),
-    ("fibonacci zero base case", "if n == 0: return 0", "define both base cases before the iteration"),
-    ("retry exponential backoff cap", "min(max_ms, base_ms * 2 ** attempt)", "use exponential growth and clamp the result to the cap"),
-    ("boolean parser strings numeric yes no on off", "mapping = {'1': True, '0': False, 'yes': True, 'no': False}", "strip and case-fold strings; accept common true/false aliases, preserve bool inputs, reject unknowns"),
-    ("decimal currency CSV exact total blank rows", "from decimal import Decimal", "skip missing or blank amounts and sum Decimal(str(value)) instead of floats"),
-    ("safe path traversal absolute encoded dot segment", "unquote(requested)", "decode URL escapes before checking; reject absolute paths and verify resolved target is relative to resolved root"),
-    ("retry classifier transient HTTP status 429 5xx", "status == 429 or 500 <= status < 600", "retry rate limits and server errors only; stop at the configured attempt limit"),
-    ("median even length do not mutate", "ordered = sorted(values)", "sort a copy, then average both middle values when the length is even"),
-    ("port parse default trim range validation", "port = int(value.strip())", "blank input uses the default; reject parse failures and ports outside 1 through 65535"),
 ]
 
 

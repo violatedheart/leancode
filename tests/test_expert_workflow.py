@@ -32,27 +32,14 @@ class ExpertWorkflowTests(unittest.TestCase):
             self.assertEqual(read_repo_notes(repo, relevant=False), "")
 
     def test_playbook_retrieval_uses_a_small_relevant_prefix(self):
-        result = retrieve("off by one loop missing last item", max_tokens=250)
-        self.assertIn("off-by-one", result)
+        result = retrieve("missing import name error", max_tokens=250)
+        self.assertIn("standard-library import", result)
         self.assertLessEqual(len(result), 1000)
 
-    def test_playbook_retrieves_unicode_accent_normalization(self):
-        result = retrieve("case insensitive palindrome accented unicode letters", limit=1)
-        self.assertIn("unicodedata.normalize('NFD'", result)
-        self.assertIn("combining marks", result)
-
-    def test_playbook_retrieves_precise_common_fix_patterns(self):
-        cases = [
-            ("parse bool strings yes no on off 0 1", "common true/false aliases"),
-            ("sum decimal CSV amounts ignoring blank rows", "Decimal(str(value))"),
-            ("reject encoded path traversal", "decode URL escapes"),
-            ("retry HTTP 429 and server errors only", "status == 429"),
-            ("median even input without mutation", "sort a copy"),
-            ("parse port with whitespace and valid range", "65535"),
-        ]
-        for query, expected in cases:
-            with self.subTest(query=query):
-                self.assertIn(expected, retrieve(query, limit=2, max_tokens=250))
+    def test_playbook_contains_only_general_examples(self):
+        self.assertEqual(len(__import__("leancode.playbook", fromlist=["EXAMPLES"]).EXAMPLES), 3)
+        result = retrieve("missing import NameError", limit=1)
+        self.assertIn("standard-library import", result)
 
     def test_symbol_graph_adds_direct_caller_without_llm(self):
         index = SymbolIndex(Path.cwd())

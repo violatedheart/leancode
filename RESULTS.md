@@ -1,5 +1,7 @@
 # LeanCode benchmark results
 
+> **INVALIDATED — do not cite these scores.** This run used benchmark-specific solution templates in the agent and a playbook tailored to the same tasks. The 18/18 agent result and 100% token reduction measured those shortcuts, not general coding-agent performance. The templates and benchmark-matched playbook examples have since been removed. Rerun the paired benchmark against the cleaned agent before reporting a score.
+
 Model: `qwen3.5:4b`. Every lane runs in a fresh temporary copy. Hidden tests are injected only while scoring.
 
 | Task | Naive pass | Naive tokens | Agent pass | Scored pass | LeanCode tokens | Steps | Time (s) |

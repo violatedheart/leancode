@@ -1,4 +1,6 @@
-# Offline deterministic verification
+# INVALIDATED: offline benchmark-specific verification
+
+> Do not present this table as a coding-agent benchmark. It measured hardcoded solutions for the bundled benchmark tasks, not general task solving. Those solution templates have been removed from the code.
 
 Date: 2026-11-07  
 Model endpoint: unavailable  
