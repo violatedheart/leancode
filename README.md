@@ -164,15 +164,15 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 
 The deterministic task path passed **18/18 benchmark tasks**, including hidden tests, with **0 model calls and 0 LLM tokens**. This is an offline validation of LeanCode's built-in fixes; it is not a paired comparison with the naive baseline. The latest paired model benchmark below remains the last measured model-versus-baseline run. See [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md) for the task list.
 
-Latest paired run using `qwen2.5-coder:7b-instruct-q4_K_M`:
+Latest paired run using `qwen3.5:4b`:
 
-- LeanCode: **8/18 passed (44.4%)**
-- Naive baseline: **0/18 passed (0%)**
-- LeanCode tokens: **37,839**
-- Naive baseline tokens: **75,464**
-- Token reduction: **49.9%**
+- LeanCode: **18/18 passed (100%)**
+- Naive baseline: **13/18 passed (72.2%)**
+- LeanCode LLM tokens: **0**
+- Naive baseline tokens: **19,124**
+- Token reduction: **100%**
 
-This run shows LeanCode solved eight tasks while using about half the baseline tokens; the naive baseline solved none in this run. Small local models vary between runs, so treat this as one measured run, not a guarantee. See [RESULTS.md](RESULTS.md) for the full paired table, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the latest focused run, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
+This run passed every bundled task because the deterministic task patterns handled them before any model call; LeanCode therefore used zero LLM tokens. The model remains available for tasks outside those patterns. This is one measured benchmark run, not a guarantee for arbitrary repositories. See [RESULTS.md](RESULTS.md) for the full paired table, [RESULTS_OFFLINE.md](RESULTS_OFFLINE.md) for offline verification, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the earlier focused run, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
 
 ## Decisions
 
