@@ -41,11 +41,23 @@ class ExpertWorkflowTests(unittest.TestCase):
         self.assertIn("unicodedata.normalize('NFD'", result)
         self.assertIn("combining marks", result)
 
+    def test_playbook_retrieves_precise_common_fix_patterns(self):
+        cases = [
+            ("parse bool strings yes no on off 0 1", "common true/false aliases"),
+            ("sum decimal CSV amounts ignoring blank rows", "Decimal(str(value))"),
+            ("reject encoded path traversal", "decode URL escapes"),
+            ("retry HTTP 429 and server errors only", "status == 429"),
+            ("median even input without mutation", "sort a copy"),
+            ("parse port with whitespace and valid range", "65535"),
+        ]
+        for query, expected in cases:
+            with self.subTest(query=query):
+                self.assertIn(expected, retrieve(query, limit=2, max_tokens=250))
+
     def test_symbol_graph_adds_direct_caller_without_llm(self):
         index = SymbolIndex(Path.cwd())
         target = Symbol("a.py", "normalize", "function_definition", 1, 3, "def normalize():", ["normalize"])
         caller = Symbol("b.py", "load", "function_definition", 1, 4, "def load():", ["load", "normalize"])
-        index.symbols = [target, caller]
         rows = expand_symbol_graph(index, [(target, 2.0)])
         self.assertEqual([row[0].name for row in rows], ["normalize", "load"])
 
