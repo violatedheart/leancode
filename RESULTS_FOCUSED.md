@@ -4,12 +4,12 @@ Model: `qwen3.5:4b`. Every lane runs in a fresh temporary copy. Hidden tests are
 
 | Task | Naive pass | Naive tokens | LeanCode pass | LeanCode tokens | Steps | Time (s) |
 |---|---:|---:|---:|---:|---:|---:|
-| 02-palindrome-normalize | no | 5144 | yes | 3166 | 5 | 115.36 |
-| 07-parse-bool | no | 3249 | no | 4949 | 6 | 60.52 |
+| 07-parse-bool | no | 5068 | no | 5493 | 6 | 74.25 |
+| 17-safe-path-multifile | no | 5862 | no | 4163 | 6 | 68.91 |
 
 - Tasks: 2
 - Naive pass rate: 0/2 (0.0%)
-- LeanCode pass rate: 1/2 (50.0%)
-- Naive total tokens: 8393
-- LeanCode total tokens: 8115
-- Token reduction: 3.3%
+- LeanCode pass rate: 0/2 (0.0%)
+- Naive total tokens: 10930
+- LeanCode total tokens: 9656
+- Token reduction: 11.7%

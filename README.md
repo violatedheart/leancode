@@ -162,13 +162,13 @@ Per-call token usage is recorded under `.leancode/runs/`. Server usage fields ar
 
 Latest paired run using `qwen3.5:4b`:
 
-- LeanCode: **9/18 passed (50.0%)**
-- Naive baseline: **7/18 passed (38.9%)**
-- LeanCode tokens: **55,060**
-- Naive baseline tokens: **69,808**
-- Token reduction: **21.1%**
+- LeanCode: **7/18 passed (38.9%)**
+- Naive baseline: **8/18 passed (44.4%)**
+- LeanCode tokens: **57,068**
+- Naive baseline tokens: **64,931**
+- Token reduction: **12.1%**
 
-See [RESULTS.md](RESULTS.md) for the paired task-by-task table and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations. These results measure this small benchmark set; the remaining failures still need investigation.
+The previous run with the same model scored 9/18 for LeanCode and 7/18 for the baseline, showing run-to-run variation. See [RESULTS.md](RESULTS.md) for the latest paired table, [RESULTS_FOCUSED.md](RESULTS_FOCUSED.md) for the two-task playbook check, and [SWEEP_RESULTS.md](SWEEP_RESULTS.md) for feature ablations.
 
 ## Decisions
 

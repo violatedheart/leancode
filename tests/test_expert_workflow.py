@@ -58,6 +58,7 @@ class ExpertWorkflowTests(unittest.TestCase):
         index = SymbolIndex(Path.cwd())
         target = Symbol("a.py", "normalize", "function_definition", 1, 3, "def normalize():", ["normalize"])
         caller = Symbol("b.py", "load", "function_definition", 1, 4, "def load():", ["load", "normalize"])
+        index.symbols = [target, caller]
         rows = expand_symbol_graph(index, [(target, 2.0)])
         self.assertEqual([row[0].name for row in rows], ["normalize", "load"])
 

@@ -4,28 +4,28 @@ Model: `qwen3.5:4b`. Every lane runs in a fresh temporary copy. Hidden tests are
 
 | Task | Naive pass | Naive tokens | LeanCode pass | LeanCode tokens | Steps | Time (s) |
 |---|---:|---:|---:|---:|---:|---:|
-| 01-sum-last-item | yes | 682 | yes | 778 | 1 | 13.70 |
-| 02-palindrome-normalize | no | 5168 | yes | 3176 | 5 | 55.80 |
-| 03-median-even | yes | 4302 | no | 4510 | 6 | 67.39 |
-| 04-average-empty | yes | 691 | yes | 2780 | 5 | 39.33 |
-| 05-stable-unique | yes | 715 | yes | 854 | 1 | 14.62 |
-| 06-discount-rounding | no | 6043 | yes | 3648 | 6 | 71.58 |
-| 07-parse-bool | no | 4790 | no | 5121 | 6 | 67.45 |
-| 08-fibonacci-zero | yes | 3781 | yes | 2013 | 2 | 33.61 |
-| 09-invoice-tax-multifile | no | 4928 | yes | 4912 | 6 | 65.53 |
-| 10-user-lookup-multifile | yes | 819 | yes | 1746 | 2 | 23.83 |
-| 11-js-slugify | no | 6542 | no | 3431 | 6 | 62.38 |
-| 12-js-retry-delay | no | 6194 | no | 4010 | 6 | 61.66 |
-| 13-env-port-multifile | yes | 1491 | no | 3367 | 6 | 50.16 |
-| 14-csv-total-multifile | no | 1483 | no | 786 | 1 | 20.34 |
-| 15-cache-expiry-multifile | no | 5041 | no | 3939 | 6 | 65.75 |
-| 16-js-retry-classifier | no | 5304 | no | 4192 | 6 | 63.48 |
-| 17-safe-path-multifile | no | 5862 | no | 4160 | 6 | 67.64 |
-| 18-pagination-multifile | no | 5972 | yes | 1637 | 2 | 43.08 |
+| 01-sum-last-item | yes | 685 | yes | 1582 | 2 | 26.45 |
+| 02-palindrome-normalize | no | 5152 | yes | 3167 | 5 | 57.08 |
+| 03-median-even | no | 5966 | no | 4509 | 6 | 73.64 |
+| 04-average-empty | yes | 1674 | yes | 2073 | 3 | 32.59 |
+| 05-stable-unique | yes | 710 | yes | 767 | 1 | 12.92 |
+| 06-discount-rounding | no | 6042 | yes | 897 | 1 | 39.56 |
+| 07-parse-bool | yes | 1915 | no | 4922 | 6 | 53.73 |
+| 08-fibonacci-zero | yes | 2318 | no | 4751 | 6 | 51.45 |
+| 09-invoice-tax-multifile | no | 4924 | no | 4966 | 6 | 70.81 |
+| 10-user-lookup-multifile | yes | 722 | yes | 1650 | 2 | 23.16 |
+| 11-js-slugify | no | 5302 | no | 2965 | 6 | 57.52 |
+| 12-js-retry-delay | no | 6194 | no | 4785 | 6 | 64.19 |
+| 13-env-port-multifile | yes | 1491 | no | 3321 | 6 | 52.08 |
+| 14-csv-total-multifile | no | 1483 | no | 2009 | 3 | 32.47 |
+| 15-cache-expiry-multifile | no | 5041 | yes | 1726 | 2 | 41.00 |
+| 16-js-retry-classifier | yes | 3478 | no | 4219 | 6 | 56.97 |
+| 17-safe-path-multifile | no | 5862 | no | 4163 | 6 | 68.73 |
+| 18-pagination-multifile | no | 5972 | no | 4596 | 6 | 67.84 |
 
 - Tasks: 18
-- Naive pass rate: 7/18 (38.9%)
-- LeanCode pass rate: 9/18 (50.0%)
-- Naive total tokens: 69808
-- LeanCode total tokens: 55060
-- Token reduction: 21.1%
+- Naive pass rate: 8/18 (44.4%)
+- LeanCode pass rate: 7/18 (38.9%)
+- Naive total tokens: 64931
+- LeanCode total tokens: 57068
+- Token reduction: 12.1%
