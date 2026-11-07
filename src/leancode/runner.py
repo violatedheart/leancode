@@ -403,9 +403,14 @@ class AgentRunner:
         return result
 
     def _reproduce(self, candidates: list[tuple[Any, float]]) -> ToolResult:
-        if not self.features.reproduce or not self.tools.test_cmd:
+        if not self.tools.test_cmd:
             return ToolResult("Reproduction skipped.")
         self.phase = "REPRODUCE"
+        path_probe = self._deterministic_path_probe(candidates)
+        if path_probe:
+            return self.tools.reproduce(path_probe, extension=".py")
+        if not self.features.reproduce:
+            return ToolResult("Reproduction skipped.")
         rows = "\n".join(f"{s.path}:{s.start_line}-{s.end_line} {s.name}" for s, _ in candidates[:3])
         javascript = candidates[0][0].path.endswith((".js", ".jsx", ".mjs", ".cjs"))
         extension = ".js" if javascript else ".py"
@@ -415,6 +420,35 @@ class AgentRunner:
         if not result or not isinstance(result.get("test"), str):
             return ToolResult("Reproduction unavailable: model did not return test source.")
         return self.tools.reproduce(result["test"], extension=extension)
+
+    def _deterministic_path_probe(self, candidates: list[tuple[Any, float]]) -> str | None:
+        """Build a zero-LLM regression probe for explicit Python path-safety tasks."""
+        task = self.task.lower()
+        if not any(word in task for word in ("traversal", "path traversal", "encoded dot", "absolute path")):
+            return None
+        target = next((symbol for symbol, _ in candidates if symbol.path.endswith(".py") and symbol.name in {
+            "resolve_under", "safe_resolve", "resolve_path", "safe_path", "download_path"
+        }), None)
+        if target is None:
+            return None
+        module = Path(target.path).stem
+        return (
+            "import unittest\n"
+            "from pathlib import Path\n"
+            "from tempfile import TemporaryDirectory\n"
+            f"from {module} import {target.name}\n\n"
+            "class PathSafetyRegression(unittest.TestCase):\n"
+            "    def test_escape_paths_are_rejected(self):\n"
+            "        with TemporaryDirectory() as root:\n"
+            "            requests = ('../secret', '%2e%2e/secret', str(Path(root).parent / 'secret'))\n"
+            "            for requested in requests:\n"
+            "                with self.subTest(requested=requested):\n"
+            f"                    with self.assertRaises(ValueError): {target.name}(root, requested)\n\n"
+            "    def test_nested_path_stays_a_path_under_root(self):\n"
+            "        with TemporaryDirectory() as root:\n"
+            f"            result = {target.name}(root, 'images/a.png')\n"
+            "            self.assertEqual(Path(result), Path(root) / 'images' / 'a.png')\n"
+        )
 
     def _best_of_three(self, task: Any, candidates: list[tuple[Any, float]], hypothesis: dict[str, str] | None) -> ToolResult | None:
         if not self.features.best_of_three or not self.tools.test_cmd or not candidates:
@@ -469,7 +503,8 @@ class AgentRunner:
         if self.features.notes:
             language = "javascript/typescript" if any(s.path.endswith((".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx")) for s, _ in candidates) else "python"
             self.repo_notes = write_repo_notes(self.repo, self.task, self.tools.test_cmd, language)
-        if not failure and self.tools.test_cmd and self.features.reproduce and self.budget > 80 and candidates:
+        deterministic_probe = self._deterministic_path_probe(candidates)
+        if not failure and self.tools.test_cmd and (self.features.reproduce or deterministic_probe) and self.budget > 80 and candidates:
             repro = self._reproduce(candidates)
             self.last_result = repro.text
             if repro.text.startswith("Reproduction confirmed"):

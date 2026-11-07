@@ -55,6 +55,27 @@ def action(name, **values):
 
 
 class M2Tests(unittest.TestCase):
+    def test_path_task_gets_zero_llm_security_reproduction_probe(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            (repo / "paths.py").write_text(
+                "from pathlib import Path\n\ndef resolve_under(root, requested):\n    return (Path(root) / requested).resolve()\n",
+                encoding="utf-8",
+            )
+            tools = ProjectTools(repo, f'"{__import__("sys").executable}" -m unittest discover -s tests -q')
+            symbol = Symbol("paths.py", "resolve_under", "function_definition", 3, 4, "def resolve_under(root, requested):", ["resolve_under", "path"])
+            agent = AgentRunner(
+                repo,
+                "Reject path traversal, absolute paths, and encoded dot segments while allowing nested paths under the root.",
+                client=FakeClient([]),
+                tools=tools,
+            )
+            probe = agent._deterministic_path_probe([(symbol, 1.0)])
+            self.assertIsNotNone(probe)
+            result = tools.reproduce(probe or "")
+            self.assertIn("Reproduction confirmed", result.text)
+            tools.cleanup_reproduction()
+
     def test_localized_patch_candidates_exclude_tests_but_keep_production_symbol(self):
         production = Symbol("src/palindrome.py", "is_palindrome", "function_definition", 1, 4, "def is_palindrome(text):", ["palindrome"])
         test_function = Symbol("tests/test_solution.py", "test_plain", "function_definition", 5, 6, "def test_plain(self):", ["test_plain"])
