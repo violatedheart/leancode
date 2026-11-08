@@ -55,6 +55,23 @@ def action(name, **values):
 
 
 class M2Tests(unittest.TestCase):
+    def test_find_and_read_localize_new_edit_targets(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            (repo / "config.py").write_text("def parse_config(value):\n    return value\n", encoding="utf-8")
+            tools = ProjectTools(repo, None)
+            agent = AgentRunner(repo, "Update configuration parsing", client=FakeClient([]), tools=tools)
+            found = agent._tool(action("find", query="parse_config"))
+            self.assertIn("parse_config", found.text)
+            self.assertIn("config.py", agent.selected_symbols)
+
+            (repo / "other.py").write_text("def normalize_header(value):\n    return value\n", encoding="utf-8")
+            agent.index = SymbolIndex(repo).build(force=True)
+            agent.tools.index = agent.index
+            read = agent._tool(action("read", path="other.py", start=1, end=2))
+            self.assertIn("normalize_header", read.text)
+            self.assertIn("other.py", agent.selected_symbols)
+
     def test_localized_patch_candidates_exclude_tests_but_keep_production_symbol(self):
         production = Symbol("src/palindrome.py", "is_palindrome", "function_definition", 1, 4, "def is_palindrome(text):", ["palindrome"])
         test_function = Symbol("tests/test_solution.py", "test_plain", "function_definition", 5, 6, "def test_plain(self):", ["test_plain"])

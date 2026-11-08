@@ -249,11 +249,20 @@ class AgentRunner:
         name = action["action"]
         try:
             if name == "find":
-                return self.tools.find(action.get("query") or "")
+                query = action.get("query") or ""
+                for symbol, _score in self.index.rank(query, limit=12):
+                    self.selected_symbols[symbol.path] = symbol
+                return self.tools.find(query)
             if name == "read":
                 if not action.get("path"):
                     return ToolResult("read requires path")
-                return self.tools.read(action["path"], action.get("start") or 1, action.get("end") or action.get("start") or 1)
+                start = action.get("start") or 1
+                end = action.get("end") or start
+                result = self.tools.read(action["path"], start, end)
+                for symbol in self.index.symbols:
+                    if symbol.path == action["path"] and symbol.start_line <= end and symbol.end_line >= start:
+                        self.selected_symbols[symbol.path] = symbol
+                return result
             if name == "edit":
                 if not action.get("path") or not action.get("search"):
                     return ToolResult("edit requires path and non-empty search")
@@ -544,6 +553,10 @@ class AgentRunner:
                 repair_guidance = "The search block did not match. Read the candidate's current source, then use an exact, unique block copied from it."
             elif "outside localized symbols" in failure.lower():
                 repair_guidance = "The target was not localized. Use find/read on the named production file, then edit only a symbol returned as a candidate; do not retry that outside path."
+            elif "has no attribute 'lower'" in failure.lower() or "has no attribute 'strip'" in failure.lower():
+                repair_guidance = "An input reached a string method with the wrong type. Branch on input type first and preserve explicitly supported non-string values."
+            elif "expected" in failure.lower() and "actual" in failure.lower():
+                repair_guidance = "Compare expected and actual values at the failing assertion; derive the missing transformation and retain boundary/cap behavior."
             else:
                 repair_guidance = "Use the failing test name, assertion, and source line to correct the behavior; preserve passing cases and make the smallest different patch."
             prompt = (
@@ -569,6 +582,13 @@ class AgentRunner:
             if result.changed_path and result.changed_path not in self.files_touched:
                 self.files_touched.append(result.changed_path)
             if result.changed_path:
+                self.index = self.tools.index
+                current_symbols = {(symbol.path, symbol.name): symbol for symbol in self.index.symbols}
+                candidates = [
+                    (current_symbols[(symbol.path, symbol.name)], score)
+                    for symbol, score in candidates
+                    if (symbol.path, symbol.name) in current_symbols
+                ]
                 passed, detail, test_output = self._verify_patch(result.changed_path, failure)
                 self.last_result = detail
                 if passed:
