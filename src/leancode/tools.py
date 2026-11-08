@@ -284,11 +284,24 @@ def compress_test_output(output: str, repo: Path) -> str:
     names = [line for line in lines if re.search(r"(?:FAILED|ERROR|FAIL):?\s+\S+|^\s*test_[\w.]+.*(?:FAIL|ERROR)|===\s*(?:short test summary|failures)", line, re.I)]
     assertions = [line for line in lines if re.search(r"AssertionError|AssertionFailed|Expected|Actual|assert\s|^E\s+|Error:|Exception:", line, re.I)]
     frames = []
+    source_lines = []
     for index, line in enumerate(lines):
         normalized = line.replace("\\", "/").lower()
-        is_frame = bool(re.search(r"File ['\"].*\.(?:py|js|jsx|ts|tsx)|\bat\s+.*\.(?:js|jsx|ts|tsx):\d+", line))
-        if is_frame and (root in normalized or not re.search(r"site-packages|node_modules|/lib/python", normalized)):
+        frame = re.search(r"File ['\"](.+?)['\"], line (\d+)", line)
+        is_frame = bool(frame or re.search(r"\bat\s+.*\.(?:js|jsx|ts|tsx):\d+", line))
+        if is_frame and root in normalized:
             frames.append((index, line))
+            if frame:
+                try:
+                    source_path = Path(frame.group(1)).resolve()
+                    line_number = int(frame.group(2))
+                    if repo.resolve() in source_path.parents and source_path.is_file():
+                        source = source_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+                        if 1 <= line_number <= len(source):
+                            relative = source_path.relative_to(repo.resolve()).as_posix()
+                            source_lines.append(f"source {relative}:{line_number}: {source[line_number - 1].strip()}")
+                except (OSError, ValueError):
+                    pass
     frames = frames[:8]
-    picked = list(dict.fromkeys(names[:10] + assertions[:10] + [line for _, line in frames]))
+    picked = list(dict.fromkeys(names[:10] + assertions[:10] + [line for _, line in frames] + source_lines[:8]))
     return _cap("\n".join(picked) if picked else "No failure lines found; test command returned no recognizable diagnostics.")

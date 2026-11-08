@@ -42,6 +42,16 @@ class M3Tests(unittest.TestCase):
             self.assertIn("AssertionError", compressed)
             self.assertLessEqual(sum("File \"" in line for line in compressed.splitlines()), 8)
 
+    def test_compressed_python_failure_includes_the_failing_source_line(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            repo = Path(directory)
+            test_file = repo / "tests" / "test_value.py"
+            test_file.parent.mkdir()
+            test_file.write_text('self.assertEqual(parse(" YES "), True)\n', encoding="utf-8")
+            output = f'ERROR: test_value\n  File "{test_file}", line 1, in test_value\nValueError: invalid input'
+            compressed = compress_test_output(output, repo)
+            self.assertIn('source tests/test_value.py:1: self.assertEqual(parse(" YES "), True)', compressed)
+
     def test_no_parser_is_offline_unavailable_instead_of_network_download(self):
         self.assertIsNone(syntax_check(Path("example.ts"), "const x: number = 1;"))
 

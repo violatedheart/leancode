@@ -538,6 +538,14 @@ class AgentRunner:
                 retrieve_playbook(self.task + "\n" + failure, limit=1, max_tokens=80)
                 if self.features.playbook else ""
             )
+            if "identical patch retry" in failure.lower():
+                repair_guidance = "Your previous edit was rejected as an identical retry. Do not repeat its path, search, and replacement; inspect the source and make a materially different edit."
+            elif "found 0" in failure.lower() or "unique match" in failure.lower():
+                repair_guidance = "The search block did not match. Read the candidate's current source, then use an exact, unique block copied from it."
+            elif "outside localized symbols" in failure.lower():
+                repair_guidance = "The target was not localized. Use find/read on the named production file, then edit only a symbol returned as a candidate; do not retry that outside path."
+            else:
+                repair_guidance = "Use the failing test name, assertion, and source line to correct the behavior; preserve passing cases and make the smallest different patch."
             prompt = (
                 f"{self._state_card(self.max_steps - self.steps)}\n"
                 f"REPAIR attempt {attempts}; failure class: {failure_class}. Change strategy: "
@@ -545,7 +553,7 @@ class AgentRunner:
                 f"Hypothesis: {hypothesis or '(none)'}\nFailure only: {failure[:700]}\nCandidates:\n{rows}\n"
                 "Use the exact candidate path and language shown above.\n"
                 "Preserve existing signatures, return types, and caller contracts.\n"
-                "When a Python integer-only test fails on True, reject bool explicitly; replace the existing check instead of duplicating it.\n"
+                f"Repair guidance: {repair_guidance}\n"
                 f"Relevant fix pattern: {repair_playbook or '(none)'}\n"
                 "Use one find/read/edit/test action; keep the patch inside a selected symbol."
             )
